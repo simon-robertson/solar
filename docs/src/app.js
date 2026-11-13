@@ -1,0 +1,343 @@
+import { BODIES, BODY_FLOATS } from "./data.js";
+import { Simulation, toEpochDays, MIN_DAY, MAX_DAY } from "./simulation.js";
+import { Camera } from "./camera.js";
+import { Renderer } from "./renderer.js";
+
+const $ = id => document.getElementById(id);
+const canvas = $("universe");
+const simulation = new Simulation();
+const camera = new Camera();
+const renderer = new Renderer(canvas,fail);
+const date = new Date();
+const dateFormat = new Intl.DateTimeFormat("en-GB",{ day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
+const numbers = new Intl.NumberFormat("en-GB",{ maximumFractionDigits: 0 });
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+if (reducedMotion) simulation.paused = true;
+
+let selected = -1, running = false, animation = 0, lastTime = 0, lastUI = 0, lastLabels = 0;
+let frames = 0, frameMillis = 0, cpuMillis = 0, validationErrors = 0;
+let width = window.innerWidth, height = window.innerHeight, showLabels = true;
+let pointer = -1, lastX = 0, lastY = 0, moved = 0;
+const buttons = [], labels = [];
+const labelBounds = new Float32Array(BODIES.length*4);
+const nav = $("planet-nav");
+const labelsContainer = $("labels");
+const loadScreen = $("loading");
+const loadingText = $("loading-text");
+const pauseIcon = $("pause-icon"), playIcon = $("play-icon"), pauseButton = $("pause");
+const timeState = $("time-state"), dateText = $("date");
+const stats = { fps: $("stat-fps"), frame: $("stat-frame"), cpu: $("stat-cpu"), draws: $("stat-draws"), compute: $("stat-compute"), resolution: $("stat-resolution"), delta: $("stat-delta"), resources: $("stat-resources"), errors: $("stat-errors") };
+const info = { kind: $("body-kind"), name: $("body-name"), description: $("body-description"), label1: $("fact-one-label"), value1: $("fact-one"), label2: $("fact-two-label"), value2: $("fact-two"), fact: $("body-fact"), explore: $("explore") };
+const preferencesKey = "solar.preferences.v1";
+const preferences = {
+  speed: $("speed").value, reverse: false,
+  orbits: renderer.orbits, labels: showLabels, atmospheres: renderer.atmospheres,
+  bloom: renderer.bloom, quality: $("quality").value, exposure: renderer.exposure,
+};
+
+function restorePreferences() {
+  let saved;
+  try { saved = JSON.parse(localStorage.getItem(preferencesKey)); }
+  catch { return; } // Storage can be disabled or contain malformed JSON.
+  if (!saved || typeof saved!=="object" || Array.isArray(saved)) return;
+  for (const key of ["reverse","orbits","labels","atmospheres","bloom"]) {
+    if (typeof saved[key]==="boolean") preferences[key] = saved[key];
+  }
+  for (const key of ["speed","quality"]) {
+    for (const option of $(key).options) {
+      if (option.value===saved[key]) { preferences[key] = saved[key]; break; }
+    }
+  }
+  const exposure = $("exposure");
+  if (Number.isFinite(saved.exposure) && saved.exposure>=Number(exposure.min) && saved.exposure<=Number(exposure.max)) {
+    preferences.exposure = saved.exposure;
+  }
+  $("speed").value = preferences.speed;
+  simulation.speed = Number(preferences.speed)*(preferences.reverse?-1:1);
+  $("reverse").setAttribute("aria-pressed",String(preferences.reverse));
+  renderer.orbits = $("orbits").checked = preferences.orbits;
+  renderer.bloom = $("bloom").checked = preferences.bloom;
+  renderer.atmospheres = $("atmospheres").checked = preferences.atmospheres;
+  showLabels = $("labels-toggle").checked = preferences.labels;
+  labelsContainer.hidden = !showLabels;
+  $("quality").value = preferences.quality;
+  renderer.scale = Number(preferences.quality);
+  exposure.value = preferences.exposure;
+  renderer.exposure = Number(exposure.value);
+}
+
+function savePreferences() {
+  preferences.speed = $("speed").value;
+  preferences.reverse = simulation.speed<0;
+  preferences.orbits = renderer.orbits;
+  preferences.labels = showLabels;
+  preferences.atmospheres = renderer.atmospheres;
+  preferences.bloom = renderer.bloom;
+  preferences.quality = $("quality").value;
+  preferences.exposure = renderer.exposure;
+  // Writes happen only on control changes, never in the animation loop.
+  try { localStorage.setItem(preferencesKey,JSON.stringify(preferences)); }
+  catch { /* Continue normally when browser storage is unavailable or full. */ }
+}
+
+for (let i = 0; i < BODIES.length; i++) {
+  const body = BODIES[i];
+  const button = document.createElement("button");
+  button.className = "planet-button";
+  button.dataset.index = i;
+  button.style.setProperty("--planet",body.color);
+  button.setAttribute("aria-label",`Explore ${body.name}`);
+  button.setAttribute("aria-pressed","false");
+  // All markup comes from the static local body catalogue, never external input.
+  const textureURL = new URL(`../assets/textures/${body.texture}`,import.meta.url).href;
+  button.innerHTML = `<span class="planet-thumb" style="background-image:url('${textureURL}')" aria-hidden="true"></span><span class="planet-caption"><small>${i===0?"OUR STAR":i===9?"SATELLITE":`PLANET 0${i}`}</small><strong>${body.name}</strong></span>`;
+  button.addEventListener("click",() => selectBody(i));
+  nav.append(button); buttons.push(button);
+  const label = document.createElement("span");
+  label.className = "planet-label"; label.textContent = body.name.toUpperCase();
+  label.style.setProperty("--planet",body.color);
+  labelsContainer.append(label); labels.push(label);
+}
+
+function selectBody(index) {
+  selected = index;
+  camera.focus(index,simulation.data);
+  if (reducedMotion) camera.snap = true;
+  const body = BODIES[index];
+  for (let i = 0; i < buttons.length; i++) {
+    buttons[i].classList.toggle("active",i===index);
+    buttons[i].setAttribute("aria-pressed",String(i===index));
+    labels[i].classList.toggle("selected",i===index);
+  }
+  info.kind.textContent = body.kind;
+  info.name.textContent = body.name;
+  info.description.textContent = body.description;
+  info.label1.textContent = "MEAN RADIUS";
+  info.value1.innerHTML = `${numbers.format(body.km)} <small>km</small>`;
+  info.label2.textContent = index===0 ? "ROTATION PERIOD" : "ORBITAL PERIOD";
+  const period = index===0 ? body.day : body.period;
+  info.value2.innerHTML = period > 1000 ? `${(period/365.25).toFixed(1)} <small>years</small>` : `${period.toFixed(period < 100 ? 1 : 0)} <small>days</small>`;
+  info.fact.textContent = body.fact; info.fact.hidden = false;
+  info.explore.textContent = "Back to the system ↗";
+  setViewButtons(true);
+}
+
+function overview() {
+  camera.overview();
+  if (reducedMotion) camera.snap = true;
+  setViewButtons(false);
+  if (selected < 0) return;
+  info.explore.textContent = `Visit ${BODIES[selected].name} ↗`;
+}
+
+function setViewButtons(focused) {
+  $("overview").classList.toggle("active",!focused);
+  $("overview").setAttribute("aria-pressed",String(!focused));
+  $("planet-view").classList.toggle("active",focused);
+  $("planet-view").setAttribute("aria-pressed",String(focused));
+  $("planet-view").disabled = selected<0;
+}
+
+function updatePause() {
+  pauseIcon.toggleAttribute("hidden",simulation.paused); playIcon.toggleAttribute("hidden",!simulation.paused);
+  pauseButton.setAttribute("aria-label",simulation.paused ? "Resume simulation" : "Pause simulation");
+  const limit = simulation.days===MIN_DAY || simulation.days===MAX_DAY;
+  timeState.innerHTML = `<i></i> ${limit ? "MODEL LIMIT" : simulation.paused ? "PAUSED" : simulation.speed<0 ? "REVERSING" : "SIMULATING"}`;
+}
+
+function togglePause() { simulation.paused = !simulation.paused; updatePause(); }
+function reset() { simulation.reset(); updatePause(); lastUI = 0; }
+function setSettings(open) { $("settings").hidden = !open; $("settings-open").setAttribute("aria-expanded",String(open)); }
+
+$("overview").addEventListener("click",overview);
+$("planet-view").addEventListener("click",() => { if (selected>=0) selectBody(selected); });
+info.explore.addEventListener("click",() => { if (camera.focused>=0) overview(); else selectBody(selected<0?3:selected); });
+pauseButton.addEventListener("click",togglePause);
+$("reset").addEventListener("click",reset);
+$("reverse").addEventListener("click",() => {
+  simulation.speed = -simulation.speed;
+  $("reverse").setAttribute("aria-pressed",String(simulation.speed<0));
+  updatePause();
+  savePreferences();
+});
+$("speed").addEventListener("change",event => { simulation.speed = Number(event.target.value) * (simulation.speed<0?-1:1); savePreferences(); });
+$("settings-open").addEventListener("click",() => setSettings($("settings").hidden));
+$("settings-close").addEventListener("click",() => setSettings(false));
+$("about-open").addEventListener("click",() => $("about").showModal());
+$("about-close").addEventListener("click",() => $("about").close());
+$("about").addEventListener("click",event => { if (event.target===$("about")) { const rect = event.target.getBoundingClientRect(); if (event.clientX<rect.left || event.clientX>rect.right || event.clientY<rect.top || event.clientY>rect.bottom) event.target.close(); } });
+$("orbits").addEventListener("change",event => { renderer.orbits = event.target.checked; savePreferences(); });
+$("bloom").addEventListener("change",event => { renderer.bloom = event.target.checked; savePreferences(); });
+$("atmospheres").addEventListener("change",event => { renderer.atmospheres = event.target.checked; savePreferences(); });
+$("labels-toggle").addEventListener("change",event => { showLabels = event.target.checked; labelsContainer.hidden = !showLabels; savePreferences(); });
+$("quality").addEventListener("change",event => { renderer.scale = Number(event.target.value); renderer.resize(); savePreferences(); });
+$("exposure").addEventListener("input",event => { renderer.exposure = Number(event.target.value); });
+$("exposure").addEventListener("change",savePreferences);
+$("reload").addEventListener("click",() => location.reload());
+$("fullscreen").hidden = !document.fullscreenEnabled;
+$("fullscreen").addEventListener("click",async () => {
+  try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen(); }
+  catch { /* The host browser can decline fullscreen without affecting rendering. */ }
+});
+document.addEventListener("fullscreenchange",() => $("fullscreen").setAttribute("aria-label",document.fullscreenElement?"Exit fullscreen":"Enter fullscreen"));
+
+document.addEventListener("keydown",event => {
+  if ($("about").open) return;
+  if (event.code==="Escape") { setSettings(false); overview(); return; }
+  if (/INPUT|SELECT|TEXTAREA/.test(event.target.tagName) || event.target.isContentEditable) return;
+  if (event.code==="Space" && !event.target.closest("button,a")) { event.preventDefault(); togglePause(); }
+  else if (event.code==="KeyR") reset();
+});
+
+canvas.addEventListener("pointerdown",event => {
+  if (pointer!==-1 || event.button!==0) return;
+  pointer = event.pointerId; lastX = event.clientX; lastY = event.clientY; moved = 0;
+  canvas.setPointerCapture(pointer);
+});
+canvas.addEventListener("pointermove",event => {
+  if (event.pointerId!==pointer) return;
+  const dx = event.clientX-lastX, dy = event.clientY-lastY;
+  moved += Math.abs(dx)+Math.abs(dy);
+  if (moved>4) camera.orbit(dx,dy);
+  lastX = event.clientX; lastY = event.clientY;
+});
+canvas.addEventListener("pointerup",event => {
+  if (event.pointerId!==pointer) return;
+  if (moved<5) pick(event.clientX,event.clientY);
+  canvas.releasePointerCapture(pointer); pointer = -1;
+});
+canvas.addEventListener("pointercancel",() => { pointer = -1; });
+canvas.addEventListener("lostpointercapture",() => { pointer = -1; });
+canvas.addEventListener("wheel",event => { event.preventDefault(); camera.zoom(Math.max(-200,Math.min(200,event.deltaY))); },{ passive: false });
+canvas.addEventListener("dblclick",overview);
+
+function pick(x,y) {
+  let closest = -1, bestScore = Infinity;
+  for (let i = 0; i < BODIES.length; i++) {
+    const o = i*BODY_FLOATS;
+    const p = camera.project(simulation.data[o],simulation.data[o+1],simulation.data[o+2],width,height);
+    if (p[2]<=0) continue;
+    const radius = Math.max(13,BODIES[i].radius/p[2]/camera.tanFov*height*.5);
+    const distance = Math.hypot(x-p[0],y-p[1]);
+    const score = distance/radius;
+    if (score<1 && score<bestScore) { bestScore = score; closest = i; }
+  }
+  if (closest>=0) selectBody(closest);
+}
+
+function updateLabels() {
+  if (!showLabels) return;
+  const data = simulation.data;
+  for (let i = 0; i < labels.length; i++) {
+    const box = i*4;
+    labelBounds[box] = Infinity;
+    const o = i*BODY_FLOATS;
+    const x = data[o], y = data[o+1], z = data[o+2];
+    const p = camera.project(x,y,z,width,height);
+    const depth = p[2];
+    const radius = BODIES[i].radius / depth / camera.tanFov * height*.5;
+    let visible = depth>0 && p[0]>15 && p[0]<width-90 && p[1]>112 && p[1]<height-210 && radius<height*.36;
+    const lx = Math.round(p[0]+radius+9), ly = Math.round(p[1]-4);
+    const labelWidth = BODIES[i].name.length*6+20;
+    if (lx < (width<850?235:320) && ly<height-210) visible = false;
+    // Reuse a fixed bounds buffer to prevent labels from overlapping each other.
+    if (visible) {
+      for (let j = 0; j < i; j++) {
+        const previous = j*4;
+        if (lx<labelBounds[previous+2] && lx+labelWidth>labelBounds[previous] &&
+            ly<labelBounds[previous+3] && ly+12>labelBounds[previous+1]) { visible = false; break; }
+      }
+    }
+    // Suppress a label when another sphere actually occludes that body's centre.
+    if (visible) {
+      const dx = x-camera.eye[0],dy = y-camera.eye[1],dz = z-camera.eye[2];
+      const length = Math.hypot(dx,dy,dz), rx = dx/length,ry = dy/length,rz = dz/length;
+      for (let j = 0; j < BODIES.length; j++) {
+        if (j===i) continue;
+        const k = j*BODY_FLOATS;
+        const ox = data[k]-camera.eye[0],oy = data[k+1]-camera.eye[1],oz = data[k+2]-camera.eye[2];
+        const t = ox*rx+oy*ry+oz*rz;
+        if (t<=0 || t>=length) continue;
+        const d2 = ox*ox+oy*oy+oz*oz-t*t;
+        if (d2<BODIES[j].radius*BODIES[j].radius) { visible = false; break; }
+      }
+    }
+    labels[i].hidden = !visible;
+    if (visible) {
+      labelBounds[box] = lx; labelBounds[box+1] = ly;
+      labelBounds[box+2] = lx+labelWidth; labelBounds[box+3] = ly+12;
+      labels[i].style.transform = `translate(${lx}px,${ly}px)`;
+    } else { labelBounds[box+2] = -Infinity; }
+  }
+}
+
+function frame(now) {
+  animation = 0;
+  if (!running || document.hidden) return;
+  const start = performance.now();
+  const rawDelta = lastTime ? (now-lastTime)/1000 : 0;
+  lastTime = now;
+  const dt = Math.min(.05,Math.max(0,rawDelta));
+  simulation.tick(dt);
+  camera.update(dt,simulation.data);
+  renderer.render(camera,simulation,selected);
+  if (now-lastLabels>65) { updateLabels(); lastLabels = now; }
+  frames++;
+  if (rawDelta>0) frameMillis += rawDelta*1000;
+  cpuMillis += performance.now()-start;
+  if (now-lastUI>500) {
+    stats.fps.textContent = `${Math.round(frames/Math.max(frameMillis/1000,.001))} fps`;
+    stats.frame.textContent = `${(frameMillis/Math.max(frames,1)).toFixed(1)} ms`;
+    stats.cpu.textContent = `${(cpuMillis/Math.max(frames,1)).toFixed(2)} ms`;
+    stats.compute.textContent = renderer.computePasses;
+    stats.resolution.textContent = `${renderer.width} × ${renderer.height}`;
+    stats.delta.textContent = dt.toFixed(4);
+    stats.resources.textContent = renderer.resourceGeneration;
+    stats.errors.textContent = validationErrors;
+    date.setTime(Date.UTC(2000,0,1,12)+simulation.days*86400000);
+    dateText.textContent = dateFormat.format(date).toUpperCase();
+    dateText.dateTime = date.toISOString();
+    const atLimit = simulation.days===MIN_DAY || simulation.days===MAX_DAY;
+    if (atLimit && !pauseIcon.hasAttribute("hidden")) updatePause();
+    frames = 0; frameMillis = 0; cpuMillis = 0; lastUI = now;
+  }
+  animation = requestAnimationFrame(frame);
+}
+
+function fail(message) {
+  validationErrors++;
+  running = false;
+  cancelAnimationFrame(animation);
+  $("error-text").textContent = message;
+  $("error").hidden = false;
+  loadScreen.hidden = true;
+  stats.errors.textContent = validationErrors;
+  renderer.destroy();
+  console.error(message);
+}
+
+const resizeObserver = new ResizeObserver(() => {
+  width = canvas.clientWidth; height = canvas.clientHeight;
+  renderer.resize();
+});
+document.addEventListener("visibilitychange",() => {
+  cancelAnimationFrame(animation); animation = 0; lastTime = 0;
+  frames = 0; frameMillis = 0; cpuMillis = 0;
+  if (!document.hidden && running) animation = requestAnimationFrame(frame);
+});
+window.addEventListener("pagehide",() => {
+  running = false; cancelAnimationFrame(animation); resizeObserver.disconnect(); renderer.destroy();
+});
+
+try {
+  // Apply saved resolution before the renderer creates its first targets.
+  restorePreferences();
+  updatePause();
+  await renderer.init(simulation.data,message => { loadingText.textContent = message; });
+  resizeObserver.observe(canvas);
+  camera.update(0,simulation.data);
+  running = true;
+  animation = requestAnimationFrame(frame);
+  loadScreen.classList.add("ready");
+  setTimeout(() => { loadScreen.hidden = true; },750);
+} catch (error) { fail(error.message || String(error)); }

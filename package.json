@@ -1,0 +1,11 @@
+{
+  "name": "solar",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch server.ts",
+    "start": "bun server.ts",
+    "textures": "bun scripts/download-textures.ts",
+    "test": "bun test"
+  }
+}
