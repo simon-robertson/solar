@@ -48,8 +48,9 @@ See [GitHub's publishing-source documentation](https://docs.github.com/en/pages/
 - Select a world in the bottom rail to fly closer. System view returns to overview.
 - Move near Saturn to reveal seven major moons as non-interactive circle markers.
   This proximity detail fades out when you zoom away; see [orbital detail and LOD](notes/ORBITAL-DETAIL.md).
-- Drag the scene to orbit; scroll or pinch with two fingers to zoom. Click or tap
-  a planet to focus it.
+- Drag the scene to orbit; scroll or pinch with both fingers inside the scene to
+  zoom. Mobile and touch devices also have **+ / −** zoom buttons on the right.
+  Click or tap a planet to focus it.
 - Body labels hide during camera movement and fade back in once the camera settles.
 - Tab (or Shift+Tab) shows/hides the information panel instead of moving focus.
   The panel button in the header provides the same toggle on touch devices.

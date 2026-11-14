@@ -26,7 +26,7 @@ let compactScene = false;
 let labelsSuppressed = true, labelsQuietSince = 0, labelsFadeStarted = 0, satelliteNamesActive = false;
 const buttons = [], labels = [], satelliteLabels = [];
 const labelBounds = new Float32Array((BODIES.length+SATURN_MOONS.length)*4);
-const annotationPanels = [".header",".intro",".view-controls",".bottom-deck","#settings"].map(selector => document.querySelector(selector));
+const annotationPanels = [".header",".intro",".view-controls",".zoom-controls",".bottom-deck","#settings"].map(selector => document.querySelector(selector));
 const annotationBounds = new Float32Array(annotationPanels.length*4);
 const nav = $("planet-nav");
 const labelsContainer = $("labels");
@@ -248,11 +248,16 @@ document.addEventListener("keydown",event => {
 });
 
 const sceneGestures = new SceneGestures(canvas,camera,hideMovingLabels,pick);
-if (window.matchMedia("(pointer: coarse)").matches) $("zoom-gesture").textContent = "PINCH TO ZOOM";
+const mobileZoom = window.matchMedia("(any-pointer: coarse), (max-width: 850px)");
+function updateZoomHint() { $("zoom-gesture").textContent = mobileZoom.matches ? "PINCH / ± TO ZOOM" : "SCROLL TO ZOOM"; }
+updateZoomHint();
+mobileZoom.addEventListener("change",() => { updateZoomHint(); refreshAnnotationBounds(); });
+function zoomScene(delta) { hideMovingLabels(); camera.zoom(delta); }
+$("zoom-in").addEventListener("click",() => zoomScene(-200));
+$("zoom-out").addEventListener("click",() => zoomScene(200));
 canvas.addEventListener("wheel",event => {
   event.preventDefault();
-  hideMovingLabels();
-  camera.zoom(Math.max(-200,Math.min(200,event.deltaY)));
+  zoomScene(Math.max(-200,Math.min(200,event.deltaY)));
 },{ passive: false });
 canvas.addEventListener("dblclick",overview);
 
@@ -305,6 +310,7 @@ function updateLabels() {
     let visible = depth>0 && p[0]>15 && p[0]<width-90 && p[1]>(compactScene?12:112) && p[1]<height-(compactScene?12:210) && radius<height*.36;
     const lx = Math.round(p[0]+radius+9), ly = Math.round(p[1]-4);
     const labelWidth = BODIES[i].name.length*7+24;
+    visible &&= annotationAreaClear(lx,ly,lx+labelWidth,ly+15);
     if (!informationPanel.hidden && !compactScene && lx < (width<850?235:340) && ly<height-210) visible = false;
     // Reuse a fixed bounds buffer to prevent labels from overlapping each other.
     if (visible) {
@@ -341,7 +347,7 @@ function refreshAnnotationBounds() {
   const canvasRect = canvas.getBoundingClientRect();
   compactScene = canvasRect.top>0;
   for (let i = 0; i < annotationPanels.length; i++) {
-    if (annotationPanels[i].hidden) {
+    if (annotationPanels[i].hidden || !annotationPanels[i].getClientRects().length) {
       annotationBounds.set([Infinity,Infinity,-Infinity,-Infinity],i*4);
       continue;
     }
