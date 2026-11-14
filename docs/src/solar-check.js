@@ -73,7 +73,7 @@ export async function checkSolar(renderer, check) {
       const solarRadius = simulation.data[3];
       const radius = solarRadius*height/(2*camera.tanFov*Math.sqrt(camera.distance**2-solarRadius**2))*.85;
       for (let y = 0; y<height; y++) for (let x = 0; x<width; x++) {
-        if ((x+.5-width*.59)**2+(y+.5-height*.5)**2>radius*radius) continue;
+        if ((x+.5-width*.5)**2+(y+.5-height*.5)**2>radius*radius) continue;
         const i = (y*width+x)*3, rgb = [tone(image[i]),tone(image[i+1]),tone(image[i+2])];
         const luma = rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;
         sum += luma; square += luma*luma; count++;

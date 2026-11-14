@@ -3,12 +3,15 @@ import { Simulation, MIN_DAY, MAX_DAY } from "./simulation.js";
 import { Camera } from "./camera.js";
 import { Renderer } from "./renderer.js";
 import { SATURN_MOONS, PLANET_ORBITS, ORBIT_FLOATS, satelliteVisibility } from "./orbit-details.js";
+import { AdaptiveQuality } from "./adaptive-quality.js";
+import { SceneGestures } from "./scene-gestures.js";
 
 const $ = id => document.getElementById(id);
 const canvas = $("universe");
 const simulation = new Simulation();
 const camera = new Camera();
 const renderer = new Renderer(canvas,fail);
+const adaptiveQuality = new AdaptiveQuality();
 renderer.prepareAnnotations = prepareSatelliteMarkers;
 const date = new Date();
 const dateFormat = new Intl.DateTimeFormat("en-GB",{ day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
@@ -20,7 +23,6 @@ let selected = -1, running = false, animation = 0, lastTime = 0, lastUI = 0, las
 let frames = 0, frameMillis = 0, cpuMillis = 0, validationErrors = 0;
 let width = window.innerWidth, height = window.innerHeight, showLabels = true;
 let compactScene = false;
-let pointer = -1, lastX = 0, lastY = 0, moved = 0;
 let labelsSuppressed = true, labelsQuietSince = 0, labelsFadeStarted = 0, satelliteNamesActive = false;
 const buttons = [], labels = [], satelliteLabels = [];
 const labelBounds = new Float32Array((BODIES.length+SATURN_MOONS.length)*4);
@@ -34,7 +36,7 @@ const loadingText = $("loading-text");
 const pauseIcon = $("pause-icon"), playIcon = $("play-icon"), pauseButton = $("pause");
 const timeState = $("time-state"), dateText = $("date");
 const stats = { fps: $("stat-fps"), frame: $("stat-frame"), cpu: $("stat-cpu"), draws: $("stat-draws"), compute: $("stat-compute"), resolution: $("stat-resolution"), textures: $("stat-textures"), delta: $("stat-delta"), resources: $("stat-resources"), errors: $("stat-errors") };
-const info = { kind: $("body-kind"), name: $("body-name"), description: $("body-description"), label1: $("fact-one-label"), value1: $("fact-one"), label2: $("fact-two-label"), value2: $("fact-two"), fact: $("body-fact"), explore: $("explore") };
+const info = { kind: $("body-kind"), name: $("body-name"), label1: $("fact-one-label"), value1: $("fact-one"), label2: $("fact-two-label"), value2: $("fact-two") };
 const preferencesKey = "solar.preferences.v1";
 const preferences = {
   speed: $("speed").value, reverse: false,
@@ -43,6 +45,8 @@ const preferences = {
 };
 
 function restorePreferences() {
+  // Apply the default even when storage is empty, malformed or unavailable.
+  renderer.scale = Number(preferences.quality);
   let saved;
   try { saved = JSON.parse(localStorage.getItem(preferencesKey)); }
   catch { return; } // Storage can be disabled or contain malformed JSON.
@@ -82,9 +86,16 @@ function savePreferences() {
   preferences.bloom = renderer.bloom;
   preferences.quality = $("quality").value;
   preferences.exposure = renderer.exposure;
-  // Writes happen only on control changes, never in the animation loop.
+  // Write only when a setting changes, including an automatic quality step.
   try { localStorage.setItem(preferencesKey,JSON.stringify(preferences)); }
   catch { /* Continue normally when browser storage is unavailable or full. */ }
+}
+
+function applyQuality() {
+  renderer.scale = Number($("quality").value);
+  renderer.resize();
+  adaptiveQuality.reset();
+  savePreferences();
 }
 
 for (let i = 0; i < BODIES.length; i++) {
@@ -97,7 +108,7 @@ for (let i = 0; i < BODIES.length; i++) {
   button.setAttribute("aria-pressed","false");
   // All markup comes from the static local body catalogue, never external input.
   const textureURL = new URL(`../assets/textures/${body.texture}`,import.meta.url).href;
-  button.innerHTML = `<span class="planet-thumb" style="background-image:url('${textureURL}')" aria-hidden="true"></span><span class="planet-caption"><small>${i===0?"STAR":i===9?"SATELLITE":`0${i}`}</small><strong>${body.name}</strong></span>`;
+  button.innerHTML = `<span class="planet-caption"><strong>${body.name}</strong></span><span class="planet-thumb" style="background-image:url('${textureURL}')" aria-hidden="true"></span>`;
   button.addEventListener("click",() => selectBody(i));
   nav.append(button); buttons.push(button);
   const label = document.createElement("span");
@@ -127,14 +138,11 @@ function selectBody(index) {
   }
   info.kind.textContent = body.kind;
   info.name.textContent = body.name;
-  info.description.textContent = body.description;
   info.label1.textContent = "MEAN RADIUS";
   info.value1.innerHTML = `${numbers.format(body.km)} <small>km</small>`;
   info.label2.textContent = index===0 ? "ROTATION PERIOD" : "ORBITAL PERIOD";
   const period = index===0 ? body.day : body.period;
   info.value2.innerHTML = period > 1000 ? `${(period/365.25).toFixed(1)} <small>years</small>` : `${period.toFixed(period < 100 ? 1 : 0)} <small>days</small>`;
-  info.fact.textContent = body.fact; info.fact.hidden = false;
-  info.explore.innerHTML = 'System overview <span aria-hidden="true">↗</span>';
   setViewButtons(true);
   refreshAnnotationBounds();
 }
@@ -146,14 +154,11 @@ function overview() {
   setViewButtons(false);
   document.body.dataset.view = "system";
   info.kind.textContent = "SYSTEM OVERVIEW";
-  info.name.innerHTML = "Solar <br>system";
-  info.description.textContent = "Explore the Sun, eight planets and the Moon. Select a body to inspect its surface and orbit.";
+  info.name.textContent = "Solar system";
   info.label1.textContent = "PLANETS";
   info.value1.textContent = "08";
   info.label2.textContent = "SYSTEM AGE";
   info.value2.innerHTML = "4.6 <small>billion yr</small>";
-  info.fact.hidden = true;
-  info.explore.innerHTML = `View ${BODIES[selected<0?3:selected].name} <span aria-hidden="true">→</span>`;
   refreshAnnotationBounds();
 }
 
@@ -198,7 +203,6 @@ function toggleInformation() {
 
 $("overview").addEventListener("click",overview);
 $("planet-view").addEventListener("click",() => { if (selected>=0) selectBody(selected); });
-info.explore.addEventListener("click",() => { if (camera.focused>=0) overview(); else selectBody(selected<0?3:selected); });
 pauseButton.addEventListener("click",togglePause);
 $("reset").addEventListener("click",reset);
 $("reverse").addEventListener("click",() => {
@@ -219,7 +223,7 @@ $("orbits").addEventListener("change",event => { renderer.orbits = event.target.
 $("bloom").addEventListener("change",event => { renderer.bloom = event.target.checked; savePreferences(); });
 $("atmospheres").addEventListener("change",event => { renderer.atmospheres = event.target.checked; savePreferences(); });
 $("labels-toggle").addEventListener("change",event => { showLabels = event.target.checked; labelsContainer.hidden = !showLabels; savePreferences(); });
-$("quality").addEventListener("change",event => { renderer.scale = Number(event.target.value); renderer.resize(); savePreferences(); });
+$("quality").addEventListener("change",applyQuality);
 $("exposure").addEventListener("input",event => { renderer.exposure = Number(event.target.value); });
 $("exposure").addEventListener("change",savePreferences);
 $("reload").addEventListener("click",() => location.reload());
@@ -243,25 +247,8 @@ document.addEventListener("keydown",event => {
   else if (event.code==="KeyR") reset();
 });
 
-canvas.addEventListener("pointerdown",event => {
-  if (pointer!==-1 || event.button!==0) return;
-  pointer = event.pointerId; lastX = event.clientX; lastY = event.clientY; moved = 0;
-  canvas.setPointerCapture(pointer);
-});
-canvas.addEventListener("pointermove",event => {
-  if (event.pointerId!==pointer) return;
-  const dx = event.clientX-lastX, dy = event.clientY-lastY;
-  moved += Math.abs(dx)+Math.abs(dy);
-  if (moved>4) { hideMovingLabels(); camera.orbit(dx,dy); }
-  lastX = event.clientX; lastY = event.clientY;
-});
-canvas.addEventListener("pointerup",event => {
-  if (event.pointerId!==pointer) return;
-  if (moved<5) pick(event.clientX,event.clientY);
-  canvas.releasePointerCapture(pointer); pointer = -1;
-});
-canvas.addEventListener("pointercancel",() => { pointer = -1; });
-canvas.addEventListener("lostpointercapture",() => { pointer = -1; });
+const sceneGestures = new SceneGestures(canvas,camera,hideMovingLabels,pick);
+if (window.matchMedia("(pointer: coarse)").matches) $("zoom-gesture").textContent = "PINCH TO ZOOM";
 canvas.addEventListener("wheel",event => {
   event.preventDefault();
   hideMovingLabels();
@@ -294,7 +281,7 @@ function hideMovingLabels() {
 }
 
 function updateLabelVisibility(now) {
-  if (camera.moving || (pointer!==-1 && moved>4)) { hideMovingLabels(); return; }
+  if (camera.moving || sceneGestures.dragging) { hideMovingLabels(); return; }
   if (!labelsSuppressed) return;
   if (!labelsQuietSince) labelsQuietSince = now;
   if (now-labelsQuietSince<160) return;
@@ -436,6 +423,10 @@ function frame(now) {
   const fade = Math.min(1,Math.max(0,(now-labelsFadeStarted)/350));
   renderer.markerOpacity = labelsSuppressed ? 0 : reducedMotion ? 1 : 1-Math.pow(1-fade,3);
   renderer.render(camera,simulation,selected);
+  if ($("quality").selectedIndex>0 && adaptiveQuality.update(now)) {
+    $("quality").selectedIndex--;
+    applyQuality();
+  }
   if (!labelsSuppressed && now-lastLabels>65) { updateLabels(); lastLabels = now; }
   if (!labelsSuppressed) updateSatelliteLabels();
   frames++;
@@ -483,6 +474,7 @@ function resizeScene() {
 const resizeObserver = new ResizeObserver(resizeScene);
 function resumeFrameLoop() {
   cancelAnimationFrame(animation); animation = 0; lastTime = 0;
+  adaptiveQuality.reset();
   frames = 0; frameMillis = 0; cpuMillis = 0;
   if (!document.hidden && running) animation = requestAnimationFrame(frame);
 }

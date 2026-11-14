@@ -11,7 +11,7 @@
   <script type="module" src="./src/app.js"></script>
 </head>
 <body data-view="system">
-  <canvas id="universe" aria-label="Interactive three dimensional solar system. Drag to orbit, scroll to zoom, or choose a celestial body below."></canvas>
+  <canvas id="universe" aria-label="Interactive three dimensional solar system. Drag to orbit, scroll or pinch to zoom, or choose a celestial body below."></canvas>
   <div class="canvas-shade" aria-hidden="true"></div>
   <div id="labels" class="camera-moving" aria-hidden="true"></div>
 
@@ -23,20 +23,18 @@
       <button id="info-toggle" class="icon-button" aria-label="Hide information panel" aria-controls="information-panel" aria-expanded="true" aria-keyshortcuts="Tab" title="Hide information panel (Tab)"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15"/><path d="M10 4.5v15M6.5 8h1M6.5 11h1M6.5 14h1"/></svg></button>
       <button id="about-open" class="icon-button" aria-label="About Solar" title="About Solar"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v6m0-10v1"/></svg></button>
       <button id="settings-open" class="icon-button" aria-label="Render settings" aria-expanded="false" title="Render settings"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="16" cy="17" r="3"/></svg></button>
+      <button id="fullscreen" class="icon-button" aria-label="Enter fullscreen" title="Fullscreen"><svg viewBox="0 0 24 24"><path d="M4 9V4h5m6 0h5v5m0 6v5h-5m-6 0H4v-5"/></svg></button>
     </div>
   </header>
 
   <main>
     <section id="information-panel" class="intro" aria-live="polite">
       <div class="eyebrow"><span class="accent-line"></span><span id="body-kind">SYSTEM OVERVIEW</span></div>
-      <h1 id="body-name">Solar <br>system</h1>
-      <p id="body-description">Explore the Sun, eight planets and the Moon. Select a body to inspect its surface and orbit.</p>
+      <h1 id="body-name">Solar system</h1>
       <div id="body-facts" class="facts">
         <div><span id="fact-one-label">PLANETS</span><strong id="fact-one">08</strong></div>
         <div><span id="fact-two-label">SYSTEM AGE</span><strong id="fact-two">4.6 <small>billion yr</small></strong></div>
       </div>
-      <button id="explore" class="explore-button">View Earth <span aria-hidden="true">→</span></button>
-      <p id="body-fact" class="body-fact" hidden></p>
     </section>
 
     <div class="view-controls" role="group" aria-label="Camera view">
@@ -50,18 +48,18 @@
       <label class="switch-row" for="labels-toggle"><span>Body labels</span><input type="checkbox" id="labels-toggle" checked><span class="switch" aria-hidden="true"></span></label>
       <label class="switch-row" for="atmospheres"><span>Atmospheres</span><input type="checkbox" id="atmospheres" checked><span class="switch" aria-hidden="true"></span></label>
       <label class="switch-row" for="bloom"><span>Solar bloom</span><input type="checkbox" id="bloom" checked><span class="switch" aria-hidden="true"></span></label>
-      <label class="setting-select" for="quality">Resolution <select id="quality"><option value="0.7">Performance</option><option value="1" selected>Balanced</option><option value="1.35">High</option></select></label>
+      <label class="setting-select" for="quality">Resolution <select id="quality"><option value="0.7">Performance</option><option value="1">Balanced</option><option value="1.35" selected>High</option></select></label>
       <label class="exposure-label" for="exposure">Exposure <input type="range" id="exposure" min="0.3" max="2" step="0.05" value="1.15"></label>
       <details class="diagnostics"><summary>Rendering diagnostics <span>+</span></summary><dl><dt>Frame rate</dt><dd id="stat-fps">—</dd><dt>Frame interval</dt><dd id="stat-frame">—</dd><dt>CPU frame work</dt><dd id="stat-cpu">—</dd><dt>Render draws / frame</dt><dd id="stat-draws">—</dd><dt>Compute dispatches</dt><dd id="stat-compute">3</dd><dt>Resolution</dt><dd id="stat-resolution">—</dd><dt>Texture maps</dt><dd id="stat-textures">—</dd><dt>Delta (seconds)</dt><dd id="stat-delta">—</dd><dt>Target rebuilds</dt><dd id="stat-resources">—</dd><dt>GPU validation errors</dt><dd id="stat-errors">0</dd></dl><p>Analytic bodies with batched paths and moon circles. Buffers, pipelines and bind groups are reused.</p></details>
     </aside>
 
     <section class="bottom-deck" aria-label="Exploration controls">
-      <div class="deck-heading"><span>SELECT A BODY <span class="deck-count">/ 10</span></span><span class="interaction-hint"><svg viewBox="0 0 16 16"><path d="M5 6v4a3 3 0 0 0 6 0V6a3 3 0 0 0-6 0Zm3-3v4"/></svg> DRAG TO ORBIT <span>·</span> SCROLL TO ZOOM</span></div>
+      <div class="deck-heading"><span>SELECT A BODY <span class="deck-count">/ 10</span></span><span class="interaction-hint"><svg viewBox="0 0 16 16"><path d="M5 6v4a3 3 0 0 0 6 0V6a3 3 0 0 0-6 0Zm3-3v4"/></svg> DRAG TO ORBIT <span class="hint-separator">·</span> <span id="zoom-gesture">SCROLL TO ZOOM</span></span></div>
       <nav id="planet-nav" class="planet-nav" aria-label="Celestial bodies"></nav>
       <div class="timeline">
         <div class="time-controls"><button id="reset" class="icon-button" aria-label="Reset simulation to today" title="Reset to today (R)"><svg viewBox="0 0 24 24"><path d="M4 11a8 8 0 1 1 2 6M4 5v6h6"/></svg></button><button id="pause" class="play-button" aria-label="Pause simulation" title="Play / pause (Space)"><svg id="pause-icon" viewBox="0 0 24 24"><path d="M9 6v12M15 6v12"/></svg><svg id="play-icon" viewBox="0 0 24 24" hidden><path d="m9 5 10 7-10 7Z"/></svg></button><button id="reverse" class="icon-button" aria-label="Reverse time" aria-pressed="false" title="Reverse time"><svg viewBox="0 0 24 24"><path d="m11 7-6 5 6 5Zm8 0-6 5 6 5Z"/></svg></button><span class="speed-divider"></span><label for="speed" class="sr-only">Simulation speed</label><select id="speed"><option value="0.000011574074074">Real time</option><option value="0.0416666667" selected>1 hour / sec</option><option value="1">1 day / sec</option><option value="5">5 days / sec</option><option value="30">30 days / sec</option><option value="100">100 days / sec</option></select></div>
         <div class="simulation-date"><span id="time-state"><i></i> SIMULATING</span><time id="date">13 NOV 2026</time></div>
-        <div class="scale-note"><span class="scale-dot"></span> SIZE & DISTANCE NOT TO SCALE <button id="fullscreen" class="icon-button" aria-label="Enter fullscreen" title="Fullscreen"><svg viewBox="0 0 24 24"><path d="M4 9V4h5m6 0h5v5m0 6v5h-5m-6 0H4v-5"/></svg></button></div>
+        <div class="scale-note"><span class="scale-dot"></span> SIZE & DISTANCE NOT TO SCALE</div>
       </div>
     </section>
   </main>
@@ -71,7 +69,7 @@
     <div class="eyebrow"><span class="accent-line"></span>ABOUT SOLAR</div>
     <h2 id="about-title">The model</h2>
     <p>Solar is an interactive model of the Sun, eight planets and the Moon. Saturn’s seven major moons appear as markers in close views.</p>
-    <p>Drag to orbit the camera. Scroll to zoom. Select a body for a closer view. Press <kbd>Tab</kbd> or use the panel button in the header to show or hide the information panel. Press <kbd>Space</kbd> to pause, <kbd>R</kbd> to return to today, or <kbd>Esc</kbd> to return to the system view.</p>
+    <p>Drag to orbit the camera. Scroll or pinch with two fingers to zoom. Select a body for a closer view. Press <kbd>Tab</kbd> or use the panel button in the header to show or hide the information panel. Press <kbd>Space</kbd> to pause, <kbd>R</kbd> to return to today, or <kbd>Esc</kbd> to return to the system view.</p>
     <h3>Scale & orbital model</h3>
     <p>Sizes and distances are compressed independently for visibility. Planets use JPL’s approximate Keplerian elements for 1800–2050; Earth uses the Earth–Moon barycentre. The Moon follows a simplified ellipse. This is an illustrative orrery, not an ephemeris or an N-body simulation. Dates stop at the model’s limits.</p>
     <h3>Sources & imagery</h3>

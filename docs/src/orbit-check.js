@@ -155,7 +155,7 @@ try {
   check("Circle CSS size survives zoom and resolution changes",fixedRadius);
   view();
   const edge = [Math.floor(center[0]+11)+.5,Math.floor(center[1])+.5];
-  const ndc = [edge[0]/width*2-1.18,1-edge[1]/height*2];
+  const ndc = [edge[0]/width*2-1,1-edge[1]/height*2];
   const ray = Array.from(camera.forward,(_,j)=>camera.forward[j]+camera.tanFov*(ndc[0]*width/height*camera.right[j]+ndc[1]*camera.up[j]));
   const magnitude = Math.hypot(...ray), saturn = 6*BODY_FLOATS;
   for (let j = 0; j < 3; j++) bodies[saturn+j] = camera.eye[j]+ray[j]/magnitude-(j===0?1.5:0);

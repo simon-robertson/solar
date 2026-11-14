@@ -82,7 +82,7 @@ export class OrbitDetails {
     const depth = dx*camera.forward[0]+dy*camera.forward[1]+dz*camera.forward[2];
     const limit = this.saturnLod.active ? 1.2 : 1.05;
     const inView = depth>0 &&
-      Math.abs((dx*camera.right[0]+dy*camera.right[1]+dz*camera.right[2])/(depth*camera.tanFov*aspect)+.18)<limit &&
+      Math.abs((dx*camera.right[0]+dy*camera.right[1]+dz*camera.right[2])/(depth*camera.tanFov*aspect))<limit &&
       Math.abs((dx*camera.up[0]+dy*camera.up[1]+dz*camera.up[2])/(depth*camera.tanFov))<limit;
     const opacity = this.saturnLod.update(inView ? distance : Infinity,simulation.deltaSeconds);
     // Local detail must never change the visibility of unrelated planet paths.

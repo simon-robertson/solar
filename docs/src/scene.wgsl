@@ -77,6 +77,12 @@ const SUN_SAMPLES = array<vec2f, 32>(
   return vec4f(uv * 2.0 - 1.0, 0.0, 1.0);
 }
 
+// Bodies and orbit occlusion share the same centred camera projection.
+fn cameraRay(pixel: vec2f) -> vec3f {
+  let ndc = vec2f(pixel.x/camera.viewport.x*2.0-1.0,1.0-pixel.y/camera.viewport.y*2.0);
+  return normalize(camera.forward.xyz+camera.eye.w*(ndc.x*camera.right.w*camera.right.xyz+ndc.y*camera.up.xyz));
+}
+
 // Unit rays give a quadratic with a=1. Both roots are handled for inside views.
 fn sphereHit(ro: vec3f, rd: vec3f, center: vec3f, radius: f32) -> f32 {
   let oc = ro - center;
@@ -359,7 +365,7 @@ fn orbitPoint(orbit: Orbit, point: vec2f) -> vec3f {
 fn orbitClipPosition(point: vec3f) -> vec3f {
   let delta = point-camera.eye.xyz;
   let z = dot(delta,camera.forward.xyz);
-  return vec3f(dot(delta,camera.right.xyz)/(camera.eye.w*camera.right.w)+0.18*z,
+  return vec3f(dot(delta,camera.right.xyz)/(camera.eye.w*camera.right.w),
     dot(delta,camera.up.xyz)/camera.eye.w,z);
 }
 fn orbitScreen(point: vec3f) -> vec2f {
@@ -444,8 +450,7 @@ fn orbitCorner(index: u32) -> vec2f {
     ink = mix(vec3f(0.026,0.025,0.020),vec3f(0.29,0.265,0.19),trail)*input.style.w;
   }
   if (coverage<=0.0) { discard; }
-  let ndc = vec2f(pixel.x/camera.viewport.x*2.0-1.18,1.0-pixel.y/camera.viewport.y*2.0);
-  let rd = normalize(camera.forward.xyz+camera.eye.w*(ndc.x*camera.right.w*camera.right.xyz+ndc.y*camera.up.xyz));
+  let rd = cameraRay(pixel);
   let ro = camera.eye.xyz;
   let depth = 1.0/(inverseDepth*max(dot(rd,camera.forward.xyz),0.000001));
   for (var i = 0u; i<arrayLength(&bodies); i++) {
@@ -607,11 +612,8 @@ fn compositeRingAtmospheres(background: vec3f, ro: vec3f, rd: vec3f, nearest: f3
 }
 
 @fragment fn fragment(@builtin(position) frag: vec4f) -> @location(0) vec4f {
-  let ndc = vec2f(frag.x / camera.viewport.x * 2.0 - 1.0 - 0.18,
-                 1.0 - frag.y / camera.viewport.y * 2.0);
   let ro = camera.eye.xyz;
-  let rd = normalize(camera.forward.xyz + camera.eye.w *
-    (ndc.x * camera.right.w * camera.right.xyz + ndc.y * camera.up.xyz));
+  let rd = cameraRay(frag.xy);
   var nearest = FAR;
   var hit = -1;
   for (var i = 0u; i < arrayLength(&bodies); i++) {

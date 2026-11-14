@@ -137,16 +137,23 @@ describe("camera",() => {
     camera.snap = true; camera.update(0,data);
     expect(camera.moving).toBe(false);
   });
-  test("projects its target at the shader's optical centre and retains its arrays",() => {
+  test("centres every body and the overview across desktop and mobile viewports, retaining arrays",() => {
     const camera = new Camera(), s = new Simulation(0), eye = camera.eye, projected = camera.projection;
     camera.update(0,s.data);
-    const p = camera.project(0,0,0,1200,800);
-    expect(p[0]).toBeCloseTo(708,2); expect(p[1]).toBeCloseTo(400,2);
-    camera.focus(3,s.data);
-    for (let i = 0; i < 500; i++) camera.update(.016,s.data);
-    const o = 3*BODY_FLOATS;
-    camera.project(s.data[o],s.data[o+1],s.data[o+2],1200,800);
-    expect(projected[0]).toBeCloseTo(708,2); expect(projected[1]).toBeCloseTo(400,2);
+    for (const [width,height] of [[1200,800],[390,314],[844,390]]) {
+      for (let index = -1; index < BODIES.length; index++) {
+        if (index<0) camera.overview();
+        else camera.focus(index,s.data);
+        for (let i = 0; i < 500; i++) camera.update(.016,s.data);
+        const o = index*BODY_FLOATS;
+        camera.project(index<0?0:s.data[o],index<0?0:s.data[o+1],index<0?0:s.data[o+2],width,height);
+        expect(projected[0]).toBeCloseTo(width/2,2); expect(projected[1]).toBeCloseTo(height/2,2);
+      }
+      camera.overview();
+      for (let i = 0; i < 500; i++) camera.update(.016,s.data);
+      camera.project(0,0,0,width,height);
+      expect(projected[0]).toBeCloseTo(width/2,2); expect(projected[1]).toBeCloseTo(height/2,2);
+    }
     expect(camera.eye).toBe(eye); expect(camera.projection).toBe(projected);
   });
 });

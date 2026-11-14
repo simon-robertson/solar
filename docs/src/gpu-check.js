@@ -166,7 +166,7 @@ try {
   async function luminance() {
     renderer.render(camera,simulation,3);
     const encoder = device.createCommandEncoder();
-    encoder.copyTextureToBuffer({ texture: target,origin: [Math.floor(renderer.width*.59),Math.floor(renderer.height*.5)] },{ buffer: readback,bytesPerRow: 256 },[1,1]);
+    encoder.copyTextureToBuffer({ texture: target,origin: [Math.floor(renderer.width*.5),Math.floor(renderer.height*.5)] },{ buffer: readback,bytesPerRow: 256 },[1,1]);
     device.queue.submit([encoder.finish()]);
     await readback.mapAsync(GPUMapMode.READ);
     const rgba = new Uint16Array(readback.getMappedRange());

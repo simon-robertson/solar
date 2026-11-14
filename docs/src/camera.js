@@ -84,7 +84,7 @@ export class Camera {
   project(x,y,z,width,height) {
     const dx = x-this.eye[0], dy = y-this.eye[1], dz = z-this.eye[2];
     const depth = dx*this.forward[0]+dy*this.forward[1]+dz*this.forward[2];
-    this.projection[0] = ((dx*this.right[0]+dy*this.right[1]+dz*this.right[2])/(depth*this.tanFov*width/height)+1+.18)*width*.5;
+    this.projection[0] = ((dx*this.right[0]+dy*this.right[1]+dz*this.right[2])/(depth*this.tanFov*width/height)+1)*width*.5;
     this.projection[1] = (1-(dx*this.up[0]+dy*this.up[1]+dz*this.up[2])/(depth*this.tanFov))*height*.5;
     this.projection[2] = depth;
     return this.projection;

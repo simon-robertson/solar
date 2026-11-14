@@ -48,7 +48,8 @@ See [GitHub's publishing-source documentation](https://docs.github.com/en/pages/
 - Select a world in the bottom rail to fly closer. System view returns to overview.
 - Move near Saturn to reveal seven major moons as non-interactive circle markers.
   This proximity detail fades out when you zoom away; see [orbital detail and LOD](notes/ORBITAL-DETAIL.md).
-- Drag the scene to orbit; scroll to zoom. Click a planet to focus it.
+- Drag the scene to orbit; scroll or pinch with two fingers to zoom. Click or tap
+  a planet to focus it.
 - Body labels hide during camera movement and fade back in once the camera settles.
 - Tab (or Shift+Tab) shows/hides the information panel instead of moving focus.
   The panel button in the header provides the same toggle on touch devices.
@@ -63,7 +64,13 @@ See [GitHub's publishing-source documentation](https://docs.github.com/en/pages/
 Time speed/direction and all render settings persist across refreshes in
 `localStorage` under `solar.preferences.v1`. Preferences are validated on load and
 applied before GPU initialization; invalid values fall back to the defaults.
-Storage writes happen only when controls change, with exposure saved when a slider
+Resolution defaults to **High**. About two seconds below 60 FPS, measured in
+consecutive half-second samples, automatically lower it one step, through
+**Balanced** to **Performance**. Each step updates the control and saves the
+preference; resolution never increases
+automatically. FPS is rounded to a whole number to tolerate normal 60 Hz timing
+jitter. Manual resolution changes and tab resumes restart the measurement.
+Storage writes happen only when settings change, with exposure saved when a slider
 adjustment is committed. If storage is unavailable, the controls still work for
 the current session.
 
@@ -147,7 +154,8 @@ Textures and bind groups rebuild only when the drawing resolution changes. WebGP
 command encoders, pass encoders, command buffers and the presentation texture view
 are necessarily fresh handles each frame; the loop is allocation-conscious, not
 literally allocation-free. Teardown releases textures, buffers and the device.
-Resolution defaults to at most 1.5× device pixel ratio, with adjustable quality.
+The base device pixel ratio is capped at 1.5, then multiplied by the selected
+resolution scale (1.35 for High, 1 for Balanced or 0.7 for Performance).
 
 Diagnostics report frame intervals and CPU frame work (simulation, camera,
 render submission and annotations); they are **not GPU timestamp measurements**.
