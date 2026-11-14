@@ -26,7 +26,7 @@ function setup() {
   camera.goalDistance = radius*(index===6?8:5.6);
   camera.snap = true; camera.update(0,data);
   renderer.atmospheres = $("atmospheres").checked;
-  renderer.bloom = false; renderer.orbits = false;
+  renderer.bloom = false; renderer.orbits = false; renderer.markerOpacity = 0;
   renderer.render(camera,simulation,index);
   status.textContent = `${BODIES[index].name} · ${$("phase").selectedOptions[0].text} · ${renderer.width} × ${renderer.height} · ${renderer.drawCalls} draws/frame`;
 }

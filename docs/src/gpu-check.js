@@ -21,10 +21,68 @@ function half(value) {
   return sign * (exp===0 ? Math.pow(2,-14)*(fraction/1024) : exp===31 ? Infinity : Math.pow(2,exp-15)*(1+fraction/1024));
 }
 
+async function checkBloom(renderer) {
+  const device = renderer.device, size = 17, stride = 256, resources = [];
+  const texture = usage => {
+    const value = device.createTexture({ size: [size,size], format: "rgba16float", usage });
+    resources.push(value); return value;
+  };
+  const source = texture(GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST);
+  const a = texture(GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.STORAGE_BINDING);
+  const b = texture(GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.COPY_SRC);
+  const readback = device.createBuffer({ size: stride*size, usage: GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ });
+  resources.push(readback);
+  try {
+    const pixels = new Uint16Array(stride*size/2), reference = new Float64Array(size*size*3);
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const o = y*stride/2+x*4, r = (y*size+x)*3;
+      pixels[o] = x===8 && y===8 ? 0x3c00 : 0; // Unit impulse.
+      pixels[o+1] = 0x3800; // Constant field tests normalization at the borders.
+      pixels[o+2] = x===0 || y===0 ? 0x3400 : 0; // Edge impulses test clamping.
+      reference[r] = x===8 && y===8 ? 1 : 0;
+      reference[r+1] = .5; reference[r+2] = x===0 || y===0 ? .25 : 0;
+    }
+    device.queue.writeTexture({ texture: source },pixels,{ bytesPerRow: stride },[size,size]);
+    const encoder = device.createCommandEncoder(), pass = encoder.beginComputePass();
+    for (const [pipeline,input,output] of [[renderer.blurXPipeline,source,a],[renderer.blurYPipeline,a,b]]) {
+      const bind = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [
+        { binding: 0, resource: input.createView() },{ binding: 1, resource: output.createView() },
+      ] });
+      pass.setPipeline(pipeline); pass.setBindGroup(0,bind); pass.dispatchWorkgroups(3,3);
+    }
+    pass.end(); encoder.copyTextureToBuffer({ texture: b },{ buffer: readback,bytesPerRow: stride },[size,size]);
+    device.queue.submit([encoder.finish()]); await readback.mapAsync(GPUMapMode.READ);
+    // Independent original Gaussian formula, evaluated in double precision.
+    let expected = reference;
+    for (const axis of [0,1]) {
+      const next = new Float64Array(expected.length);
+      for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+        let normalization = 0;
+        for (let offset = -8; offset <= 8; offset++) {
+          const weight = Math.exp(-offset*offset/24);
+          const xx = Math.max(0,Math.min(size-1,x+(axis===0?offset:0)));
+          const yy = Math.max(0,Math.min(size-1,y+(axis===1?offset:0)));
+          for (let c = 0; c < 3; c++) next[(y*size+x)*3+c] += expected[(yy*size+xx)*3+c]*weight;
+          normalization += weight;
+        }
+        for (let c = 0; c < 3; c++) next[(y*size+x)*3+c] /= normalization;
+      }
+      expected = next;
+    }
+    const actual = new Uint16Array(readback.getMappedRange());
+    let error = 0;
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) for (let c = 0; c < 3; c++) {
+      error = Math.max(error,Math.abs(half(actual[y*stride/2+x*4+c])-expected[(y*size+x)*3+c]));
+    }
+    check("Optimized bloom preserves Gaussian shape, energy and edge clamping",error<.0005,`max HDR error ${error.toExponential(1)}`);
+    readback.unmap();
+  } finally { for (const resource of resources) resource.destroy(); }
+}
+
 try {
   const simulation = new Simulation(0), camera = new Camera();
   await renderer.init(simulation.data,message => { summary.textContent = message; });
-  renderer.bloom = false; renderer.atmospheres = false; renderer.orbits = false;
+  renderer.bloom = false; renderer.atmospheres = false; renderer.orbits = false; renderer.markerOpacity = 0;
   const device = renderer.device;
   device.pushErrorScope("validation");
   const target = device.createTexture({ size: [renderer.width,renderer.height],format: "rgba16float",usage: GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC });
@@ -74,6 +132,7 @@ try {
     Math.abs(textureValues[48]-Math.log2(mapWidth/512))<.0001 && textureValues[49]===mapLevels-1);
   readback.unmap(); textureProbeOutput.destroy();
   await checkAtmospheres(renderer,simulation,check);
+  await checkBloom(renderer);
   camera.eye.set([7.5,0,0]); camera.forward.set([1,0,0]);
   camera.right.set([0,0,1]); camera.up.set([0,1,0]);
   const data = simulation.data;

@@ -22,9 +22,7 @@ button, select, input { font: inherit; }
 button, a, input, select { -webkit-tap-highlight-color: transparent; }
 button { color: inherit; cursor: pointer; }
 button:disabled { opacity: .38; cursor: default; }
-button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible {
-  outline: 2px solid var(--text); outline-offset: 4px;
-}
+:focus { outline: none; }
 button, select { touch-action: manipulation; }
 a { color: inherit; }
 svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; flex: none; }
@@ -33,6 +31,7 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 #universe { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
 #universe:active { cursor: grabbing; }
 .canvas-shade { position: fixed; inset: 0; pointer-events: none; background: linear-gradient(90deg,#080a0ceb, #080a0c65 24%,transparent 44%),linear-gradient(0deg,#080a0cdd,transparent 28%); }
+body.info-hidden .canvas-shade { background: linear-gradient(0deg,#080a0cdd,transparent 28%); }
 .header { position: absolute; top: 0; left: var(--gutter); right: var(--gutter); height: 88px; display: flex; align-items: center; gap: 34px; border-bottom: 1px solid var(--line); z-index: 3; }
 .brand { text-decoration: none; display: flex; gap: 12px; align-items: center; font-size: 25px; font-weight: 750; letter-spacing: 4px; }
 .brand-mark { display: block; width: 22px; height: 22px; border: 1px solid var(--text); border-radius: 50%; position: relative; }
@@ -113,7 +112,6 @@ option { background: #14181c; color: var(--text); }
 .switch:after { content: ""; position: absolute; top: 3px; left: 3px; width: 10px; height: 10px; background: #a9b3bd; transition: transform .15s; }
 .switch-row input:checked+.switch { background: #e4e9ed; }
 .switch-row input:checked+.switch:after { background: #0d1013; transform: translateX(14px); }
-.switch-row input:focus-visible+.switch { outline: 2px solid var(--text); outline-offset: 4px; }
 .setting-select, .exposure-label { display: flex; justify-content: space-between; align-items: center; color: #c5cdd4; font-size: 12px; margin-top: 16px; }
 .setting-select { border-top: 1px solid var(--line); padding-top: 16px; }
 .exposure-label { min-height: 35px; }
@@ -189,6 +187,7 @@ option { background: #14181c; color: var(--text); }
   .brand-mark:after { width: 24px; top: 7px; }
   .header-note { display: none; }
   #universe, #labels { top: 350px; bottom: 180px; height: calc(100dvh - 530px); }
+  body.info-hidden #universe, body.info-hidden #labels { top: 126px; height: calc(100dvh - 306px); }
   .canvas-shade { background: linear-gradient(0deg,#080a0c,transparent 24%); }
   .intro { top: 138px; width: calc(100% - 36px); max-height: 200px; }
   .intro .body-fact { display: none; }

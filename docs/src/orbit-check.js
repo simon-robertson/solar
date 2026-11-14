@@ -1,153 +1,191 @@
 import { Renderer } from "./renderer.js";
 import { Simulation } from "./simulation.js";
 import { Camera } from "./camera.js";
-import { BODY_FLOATS } from "./data.js";
-import { ORBIT_COUNT, ORBIT_FLOATS } from "./orbit-details.js";
+import { BODIES, BODY_FLOATS } from "./data.js";
+import { ORBIT_COUNT, ORBIT_FLOATS, ORBIT_SEGMENTS } from "./orbit-details.js";
+
 const summary = document.getElementById("summary"), results = document.getElementById("results");
 let passes = 0, failures = 0;
-const errors = [];
+const errors = [], resources = [];
 const renderer = new Renderer(document.getElementById("test-canvas"),message => errors.push(message));
 function check(name,condition,detail="") {
   const item = document.createElement("li"); item.className = condition ? "pass" : "fail";
   item.textContent = `${condition?"PASS":"FAIL"} — ${name}${detail?` (${detail})`:""}`; results.append(item);
   if (condition) passes++; else failures++;
 }
+function half(value) {
+  const sign = value&0x8000 ? -1 : 1, exp = (value>>10)&31, fraction = value&1023;
+  return sign*(exp===0 ? 2**-14*fraction/1024 : exp===31 ? Infinity : 2**(exp-15)*(1+fraction/1024));
+}
 try {
   const simulation = new Simulation(0), camera = new Camera();
   await renderer.init(simulation.data,message => { summary.textContent = message; });
-  const device = renderer.device;
+  renderer.scale = 2/Math.min(devicePixelRatio || 1,1.5); renderer.resize();
+  const device = renderer.device, width = renderer.width, height = renderer.height;
   device.pushErrorScope("validation");
-  const source = await (await fetch(new URL("./scene.wgsl",import.meta.url))).text();
-  const module = device.createShaderModule({ code: source+`
-struct Probe { pixel: vec4f, mode: vec4f }
-@group(1) @binding(0) var<storage, read> probes: array<Probe>;
-@group(1) @binding(1) var<storage, read_write> output: array<vec4f>;
-@compute @workgroup_size(64) fn probeOrbits(@builtin(global_invocation_id) id: vec3u) {
-  if (id.x>=arrayLength(&probes)) { return; }
-  let p = probes[id.x];
-  let ndc = vec2f(p.pixel.x/camera.viewport.x*2.0-1.18,1.0-p.pixel.y/camera.viewport.y*2.0);
-  let ray = normalize(camera.forward.xyz+camera.eye.w*(ndc.x*camera.right.w*camera.right.xyz+ndc.y*camera.up.xyz));
-  var color = vec3f(0.0);
-  if (p.mode.x==1.0) {
-    color = satelliteMarkers(camera.eye.xyz,ray,p.pixel.xy,p.pixel.z,p.pixel.w);
-  } else if (p.mode.x==2.0) {
-    color = vec3f(orbitTrail(p.mode.y,p.mode.z,p.mode.w));
-  } else if (p.mode.x==3.0) {
-    color = vec3f(textureSampleLevel(ringMap,mapSampler,vec2f(p.mode.y,0.5),0.0).a);
-  } else {
-    color = orbitLines(camera.eye.xyz,ray,p.pixel.z,p.pixel.w);
-  }
-  output[id.x] = vec4f(color,1.0);
-}` });
-  const pipeline = await device.createComputePipelineAsync({ layout: "auto", compute: { module, entryPoint: "probeOrbits" } });
-  const input = device.createBuffer({ size: 64*32, usage: GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST });
-  const output = device.createBuffer({ size: 64*16, usage: GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC });
-  const readback = device.createBuffer({ size: 64*16, usage: GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ });
-  const bind = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [
-    { binding: 0, resource: { buffer: renderer.uniformBuffer } },{ binding: 1, resource: { buffer: renderer.bodyBuffer } },
-    { binding: 3, resource: renderer.mapSampler },{ binding: 4, resource: renderer.ring.createView() },
-    { binding: 5, resource: { buffer: renderer.orbitBuffer } },
-  ] });
-  const orbits = new Float32Array(ORBIT_COUNT*ORBIT_FLOATS), uniforms = new Float32Array(24);
+  const target = device.createTexture({ size: [width,height], format: "rgba16float", usage: GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC });
+  const bytesPerRow = Math.ceil(width*8/256)*256;
+  const readback = device.createBuffer({ size: bytesPerRow*height, usage: GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ });
+  resources.push(target,readback);
+  const passDescriptor = { colorAttachments: [{ view: target.createView(), loadOp: "clear", storeOp: "store", clearValue: { r: 0,g: 0,b: 0,a: 1 } }] };
+  const orbits = new Float32Array(ORBIT_COUNT*ORBIT_FLOATS), uniforms = new Float32Array(24), bodies = simulation.data.slice();
   orbits.set([1,0,0,1, 0,0,-1,0, 0,0,0,1, 0,1,0,1]);
-  function view(distance=7,inclination=.7) {
+  function parkBodies() {
+    for (let i = 0; i < BODIES.length; i++) {
+      bodies[i*BODY_FLOATS] = 1000+i*20; bodies[i*BODY_FLOATS+1] = bodies[i*BODY_FLOATS+2] = 1000;
+    }
+  }
+  parkBodies();
+  function cameraUniforms() {
+    uniforms.set([...camera.eye,camera.tanFov,...camera.right,width/height,...camera.up,0,...camera.forward,1,width,height,1,1,0,0,1,1]);
+  }
+  function view(distance=7,inclination=.7,target=[0,0,0]) {
     camera.goalDistance = distance; camera.goalTheta = 0; camera.goalPhi = inclination;
-    camera.snap = true; camera.update(0,simulation.data);
-    uniforms.set([...camera.eye,camera.tanFov,...camera.right,renderer.width/renderer.height,...camera.up,0,...camera.forward,1,renderer.width,renderer.height,1,1,0,0,1,1]);
+    camera.focused = -1; camera.focusOffset.fill(0); camera.snap = true; camera.update(0,simulation.data);
+    for (let j = 0; j < 3; j++) camera.eye[j] += target[j];
+    cameraUniforms();
+  }
+  const project = point => Array.from(camera.project(...point,width,height));
+  const circlePoint = angle => [Math.cos(angle),0,-Math.sin(angle)];
+  async function draw(lines=true,markers=false) {
     device.queue.writeBuffer(renderer.uniformBuffer,0,uniforms);
     device.queue.writeBuffer(renderer.orbitBuffer,0,orbits);
+    device.queue.writeBuffer(renderer.bodyBuffer,0,bodies);
+    const encoder = device.createCommandEncoder(), pass = encoder.beginRenderPass(passDescriptor);
+    pass.setBindGroup(0,renderer.sceneBind);
+    if (lines) { pass.setPipeline(renderer.orbitPipeline); pass.draw(ORBIT_SEGMENTS*6,ORBIT_COUNT); }
+    if (markers) { pass.setPipeline(renderer.markerPipeline); pass.draw(6,ORBIT_COUNT); }
+    pass.end();
+    encoder.copyTextureToBuffer({ texture: target },{ buffer: readback,bytesPerRow },[width,height]);
+    device.queue.submit([encoder.finish()]); await readback.mapAsync(GPUMapMode.READ);
+    const pixels = new Uint16Array(readback.getMappedRange()), image = new Float32Array(width*height);
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+      const o = y*bytesPerRow/2+x*4;
+      image[y*width+x] = half(pixels[o])+half(pixels[o+1])+half(pixels[o+2]);
+    }
+    readback.unmap(); return image;
   }
-  const project = point => Array.from(camera.project(...point,renderer.width,renderer.height));
-  const pixel = (point,mode=0,near=100000) => [...point.slice(0,2),near,100000,mode,0,0,0];
-  async function run(probes) {
-    device.queue.writeBuffer(input,0,new Float32Array(probes.flat()));
-    const probeBind = device.createBindGroup({ layout: pipeline.getBindGroupLayout(1), entries: [
-      { binding: 0, resource: { buffer: input, size: probes.length*32 } },{ binding: 1, resource: { buffer: output } },
-    ] });
-    const encoder = device.createCommandEncoder(), pass = encoder.beginComputePass();
-    pass.setPipeline(pipeline); pass.setBindGroup(0,bind); pass.setBindGroup(1,probeBind); pass.dispatchWorkgroups(1); pass.end();
-    encoder.copyBufferToBuffer(output,0,readback,0,probes.length*16); device.queue.submit([encoder.finish()]);
-    await readback.mapAsync(GPUMapMode.READ);
-    const values = new Float32Array(readback.getMappedRange()).slice(0,probes.length*4); readback.unmap(); return values;
+  const at = (image,x,y) => x>=0 && y>=0 && x<width && y<height ? image[Math.floor(y)*width+Math.floor(x)] : 0;
+  function peakAt(image,point) {
+    let peak = 0;
+    for (let y = -1; y <= 1; y++) for (let x = -1; x <= 1; x++) peak = Math.max(peak,at(image,point[0]+x,point[1]+y));
+    return peak;
   }
-  const light = (values,index=0) => values[index*4]+values[index*4+1]+values[index*4+2];
-  view();
-  const trail = await run([
-    [0,0,100000,100000,2,0,-.4,1], [0,0,100000,100000,2,0,.4,1],
-    [0,0,100000,100000,2,0,-.4,-1], [0,0,100000,100000,2,0,.4,-1],
-  ]);
-  check("Orbit emphasis trails the body and reverses with time",light(trail,0)>light(trail,1)*5 && light(trail,3)>light(trail,2)*5);
+  function bilinear(image,x,y) {
+    const px = x-.5, py = y-.5, tx = px-Math.floor(px), ty = py-Math.floor(py);
+    return (at(image,px,py)*(1-tx)+at(image,px+1,py)*tx)*(1-ty)+(at(image,px,py+1)*(1-tx)+at(image,px+1,py+1)*tx)*ty;
+  }
+  // Independent dense sampling of the mathematical ellipse, not the renderer's
+  // polygon or clip function. Every lit pixel must lie in its 2-pixel envelope.
+  function referenceEnvelope() {
+    const mask = new Uint8Array(width*height);
+    for (let i = 0; i < 32768; i++) {
+      const p = project(circlePoint(i/32768*Math.PI*2));
+      if (p[2]<=.001 || p[0]<-3 || p[0]>width+3 || p[1]<-3 || p[1]>height+3) continue;
+      for (let y = Math.max(0,Math.floor(p[1])-2); y <= Math.min(height-1,Math.floor(p[1])+2); y++) {
+        for (let x = Math.max(0,Math.floor(p[0])-2); x <= Math.min(width-1,Math.floor(p[0])+2); x++) mask[y*width+x] = 1;
+      }
+    }
+    return mask;
+  }
+  let bounded = true, visible = true, stray = 0;
+  for (const inclination of [.08,.005,0,-.005,-.08]) {
+    view(7,inclination);
+    const image = await draw(), mask = referenceEnvelope();
+    const lit = image.reduce((count,value) => count+(value>.00001),0);
+    visible &&= lit>30;
+    image.forEach((value,i) => { if (!Number.isFinite(value) || (value>.00001 && !mask[i])) stray++; });
+  }
+  bounded &&= stray===0;
+  check("Low-angle and coplanar views have no detached background trails",bounded && visible,`${stray} pixels outside the independent ellipse envelope`);
+  let closeVisible = true;
+  for (const [distance,inclination,target] of [[.5,0,[0,0,0]],[1,0,[0,0,0]],[.3,.25,[1,0,0]]]) {
+    view(distance,inclination,target);
+    const image = await draw(), mask = referenceEnvelope();
+    closeVisible &&= image.filter(x=>x>.00001).length>30 && image.every((x,i)=>Number.isFinite(x) && (x<=.00001 || mask[i]));
+  }
+  check("Near-plane crossings and planet-scale close-ups retain bounded paths",closeVisible);
+  const baseOrbit = orbits.slice(), closeups = [];
+  bodies.set(simulation.data);
+  for (let index = 1; index <= 8; index++) {
+    camera.focus(index,simulation.data); camera.snap = true; camera.update(0,simulation.data); cameraUniforms();
+    renderer.orbitDetails.update(simulation,camera,width/height);
+    orbits.set(renderer.orbitDetails.data);
+    for (let i = 0; i < ORBIT_COUNT; i++) if (i!==index-1) orbits[i*ORBIT_FLOATS+11] = 0;
+    const image = await draw();
+    closeups.push(image.filter(x=>x>.00001).length);
+  }
+  check("Every planet retains its actual orbit in its default close-up",closeups.every(count=>count>20),closeups.join(", ")+" lit path pixels");
+  orbits.set(baseOrbit); parkBodies();
+  view(); orbits[10] = 20;
+  check("Orbits entirely behind the camera emit no pixels",(await draw()).every(x=>x===0)); orbits[10] = 0;
 
-  const widths = [];
+  view(); orbits[12] = 0;
+  const forward = await draw(); orbits[13] = -1;
+  const reverse = await draw();
+  const before = project(circlePoint(-.5)), after = project(circlePoint(.5));
+  check("Orbit brightness trails the body and reverses with time",peakAt(forward,before)>peakAt(forward,after)*3 && peakAt(reverse,after)>peakAt(reverse,before)*3);
+  orbits[13] = 1;
+  const widths = [], pairs = [];
   for (const [distance,inclination] of [[5,.3],[10,.3],[5,1],[10,1]]) {
     view(distance,inclination);
-    const angle = -.3, point = [Math.cos(angle),0,-Math.sin(angle)];
-    const tangent = [-Math.sin(angle),0,-Math.cos(angle)], center = project(point);
-    const along = project(point.map((x,j) => x+tangent[j]*.001));
+    const angle = -.3, center = project(circlePoint(angle)), along = project(circlePoint(angle+.001));
     const length = Math.hypot(along[0]-center[0],along[1]-center[1]);
-    const normal = [-(along[1]-center[1])/length,(along[0]-center[0])/length];
-    const probes = [];
-    for (let i = -20; i <= 20; i++) probes.push(pixel([center[0]+normal[0]*i*.25,center[1]+normal[1]*i*.25]));
-    // Stay away from the trail's wrap point so a cross-section compares the
-    // stroke itself rather than straddling its bright/dark phase boundary.
+    const normal = [-(along[1]-center[1])/length,(along[0]-center[0])/length], pair = [];
     for (const phase of [angle+.3,angle+.9*Math.PI*2]) {
-      orbits[12] = phase; device.queue.writeBuffer(renderer.orbitBuffer,0,orbits);
-      const values = await run(probes), peak = Math.max(...probes.map((_,i) => light(values,i)));
-      widths.push(probes.filter((_,i) => light(values,i)>=peak*.5).length*.25);
+      orbits[12] = phase;
+      const image = await draw(), values = [];
+      for (let i = -32; i <= 32; i++) values.push(bilinear(image,center[0]+normal[0]*i*.125,center[1]+normal[1]*i*.125));
+      const peak = Math.max(...values), span = values.filter(x=>x>=peak*.5).length*.125;
+      widths.push(span); pair.push(span);
     }
+    pairs.push(Math.abs(pair[0]-pair[1]));
   }
-  check("Thin orbit width stays uniform through brightness, zoom and foreshortening",Math.max(...widths)-Math.min(...widths)<=.5 && Math.min(...widths)>=.75 && Math.max(...widths)<=1.5,`half-maximum widths ${widths.map(x=>x.toFixed(2)).join(", ")} pixels`);
-  orbits[12] = 0;
+  check("Thin stroke width is independent of trail brightness, zoom and inclination",Math.max(...pairs)<=.125 && Math.min(...widths)>=.75 && Math.max(...widths)<=2.5,`raster half-maximum widths ${widths.map(x=>x.toFixed(2)).join(", ")} pixels`);
 
-  view(); orbits[14] = 1; orbits[15] = -1; device.queue.writeBuffer(renderer.orbitBuffer,0,orbits);
-  const center = project([1,0,0]);
-  const marker = await run([pixel(center,1),pixel([center[0]+11,center[1]],1),pixel([center[0]+15,center[1]],1)]);
-  check("Moon markers are hollow antialiased screen-space circles",light(marker)===0 && light(marker,1)>.5 && light(marker,2)===0);
+  view(); orbits[12] = 0; orbits[14] = 1; orbits[15] = -1;
+  const center = project([1,0,0]), marker = await draw(false,true);
+  check("Moon annotations remain hollow screen-space circles",at(marker,...center)===0 && peakAt(marker,[center[0]+11,center[1]])>.3 && at(marker,center[0]+15,center[1])===0);
   let fixedRadius = true;
-  for (const distance of [5,14]) {
-    for (const ratio of [.7,1,1.35,2]) {
-      view(distance); uniforms[22] = ratio;
-      device.queue.writeBuffer(renderer.uniformBuffer,0,uniforms);
-      device.queue.writeBuffer(renderer.orbitBuffer,0,orbits);
-      const c = project([1,0,0]);
-      const samples = await run([pixel([c[0]+11*ratio,c[1]],1),pixel([c[0]+15*ratio,c[1]],1)]);
-      fixedRadius &&= light(samples)>.5 && light(samples,1)===0;
-    }
+  for (const distance of [5,14]) for (const ratio of [.7,1,1.35,2]) {
+    view(distance); uniforms[22] = ratio;
+    const c = project([1,0,0]), image = await draw(false,true);
+    fixedRadius &&= peakAt(image,[c[0]+11*ratio,c[1]])>.3 && at(image,c[0]+15*ratio,c[1])===0;
   }
-  check("Circle CSS radius stays fixed through zoom and resolution changes",fixedRadius);
-  view(); device.queue.writeBuffer(renderer.orbitBuffer,0,orbits);
+  check("Circle CSS size survives zoom and resolution changes",fixedRadius);
+  view();
+  const edge = [Math.floor(center[0]+11)+.5,Math.floor(center[1])+.5];
+  const ndc = [edge[0]/width*2-1.18,1-edge[1]/height*2];
+  const ray = Array.from(camera.forward,(_,j)=>camera.forward[j]+camera.tanFov*(ndc[0]*width/height*camera.right[j]+ndc[1]*camera.up[j]));
+  const magnitude = Math.hypot(...ray), saturn = 6*BODY_FLOATS;
+  for (let j = 0; j < 3; j++) bodies[saturn+j] = camera.eye[j]+ray[j]/magnitude-(j===0?1.5:0);
+  bodies[saturn+3] = 1;
+  const ring = await draw(false,true), clearEdge = at(marker,...edge), ringEdge = at(ring,...edge);
+  check("Foreground rings attenuate circles with actual texture alpha",ringEdge>clearEdge*.01 && ringEdge<clearEdge*.95,`${clearEdge.toFixed(3)} → ${ringEdge.toFixed(3)}`);
+  parkBodies();
+  for (let j = 0; j < 3; j++) bodies[BODY_FLOATS+j] = camera.eye[j]+camera.forward[j];
+  bodies[BODY_FLOATS+3] = .8;
+  check("Opaque foreground bodies hide circles",(await draw(false,true)).every(x=>x===0));
+  parkBodies();
+  uniforms[19] = 0;
+  check("Orbit toggle removes lines while keeping entity circles",(await draw()).every(x=>x===0) && (await draw(false,true)).some(x=>x>.3));
+  uniforms[19] = 1; uniforms[23] = 0;
+  check("Camera motion opacity hides circle annotations",(await draw(false,true)).every(x=>x===0));
+  uniforms[23] = 1; orbits[11] = 0;
+  check("Inactive local LOD emits neither paths nor circles",(await draw(true,true)).every(x=>x===0));
 
-  // Place the real ring annulus across the glyph's edge ray, with the sphere
-  // itself clear of that ray. Compare against independently sampled ring alpha.
-  const edge = [center[0]+11,center[1]], ndc = [edge[0]/renderer.width*2-1.18,1-edge[1]/renderer.height*2];
-  const direction = Array.from(camera.forward,(_,j) => camera.forward[j]+camera.tanFov*(ndc[0]*renderer.width/renderer.height*camera.right[j]+ndc[1]*camera.up[j]));
-  const magnitude = Math.hypot(...direction);
-  const bodyData = simulation.data.slice(), saturn = 6*BODY_FLOATS;
-  for (let j = 0; j < 3; j++) bodyData[saturn+j] = camera.eye[j]+direction[j]/magnitude-(j===0?1.5:0);
-  bodyData[saturn+3] = 1; device.queue.writeBuffer(renderer.bodyBuffer,0,bodyData);
-  const ringProbe = pixel(edge,1); ringProbe[3] = 1;
-  const ring = await run([pixel(edge,1),ringProbe,[0,0,100000,100000,3,(1.5-1.23)/(2.32-1.23),0,0]]);
-  const opacity = ring[8];
-  check("Foreground rings attenuate circles using their texture opacity",opacity>0 && opacity<1 && Math.abs(light(ring,1)-light(ring)*(1-opacity))<.005);
-  const depth = await run([pixel([center[0]+11,center[1]],1,.1)]);
-  check("Foreground opaque depth hides moon markers",light(depth)===0);
-
-  uniforms[19] = 0; device.queue.writeBuffer(renderer.uniformBuffer,0,uniforms);
-  const independent = await run([pixel([center[0]+11,center[1]],1),pixel(project([Math.cos(-.3),0,-Math.sin(-.3)]))]);
-  check("Orbit toggle hides paths while retaining moon entity circles",light(independent)>.5 && light(independent,1)===0);
-  uniforms[19] = 1; uniforms[23] = 0; device.queue.writeBuffer(renderer.uniformBuffer,0,uniforms);
-  const moving = await run([pixel([center[0]+11,center[1]],1)]);
-  check("Camera-motion opacity hides circle annotations immediately",light(moving)===0);
-  uniforms[23] = 1; device.queue.writeBuffer(renderer.uniformBuffer,0,uniforms);
-  orbits[11] = 0; device.queue.writeBuffer(renderer.orbitBuffer,0,orbits);
-  const far = await run([pixel([center[0]+11,center[1]],1),pixel(project([Math.cos(-.3),0,-Math.sin(-.3)]))]);
-  check("Inactive LOD removes both local paths and moon markers",light(far)===0 && light(far,1)===0);
-
-  renderer.render(camera,simulation,-1); await device.queue.onSubmittedWorkDone();
+  // The broad renderer checks also cover atmosphere/shadow/bloom changes. Here
+  // validate the new batching, actual draw count and target/buffer reuse.
+  const generation = renderer.resourceGeneration, points = renderer.orbitPoints;
+  const production = new Simulation(0); camera.focus(6,production.data); camera.snap = true; camera.update(0,production.data);
+  production.deltaSeconds = .25; renderer.render(camera,production,6);
+  const detailedDraws = renderer.drawCalls;
+  renderer.orbits = false; renderer.markerOpacity = 0; renderer.render(camera,production,6);
+  await device.queue.onSubmittedWorkDone();
   const validation = await device.popErrorScope();
-  check("Production orbit pipeline validates and retains two draws",!validation && errors.length===0 && renderer.drawCalls===2,validation?.message || errors.join("; "));
-  input.destroy(); output.destroy(); readback.destroy();
+  check("Production batching validates, reuses resources and stays below ten draws",!validation && errors.length===0 && detailedDraws===4 && renderer.drawCalls===2 && renderer.resourceGeneration===generation && renderer.orbitPoints===points,validation?.message || errors.join("; ") || "4 draws with paths + moons; 2 with both hidden");
 } catch (error) { check("Orbit verification completed",false,error.message); }
 finally {
+  for (const resource of resources) resource.destroy();
   renderer.destroy(); summary.textContent = `${passes} passed, ${failures} failed.`; summary.className = failures ? "fail" : "pass";
 }

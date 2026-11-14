@@ -15,7 +15,7 @@ fn aces(x: vec3f) -> vec3f {
 @fragment fn fragment(@builtin(position) frag: vec4f) -> @location(0) vec4f {
   let uv = frag.xy/camera.viewport.xy;
   var color = textureSample(scene,linearSampler,uv).rgb;
-  color += textureSample(bloom,linearSampler,uv).rgb * camera.effects.x;
+  if (camera.effects.x>0.0) { color += textureSample(bloom,linearSampler,uv).rgb * camera.effects.x; }
   color = aces(color * camera.forward.w);
   let vignette = 1.0 - 0.22 * dot(uv-0.5,uv-0.5);
   color = pow(color*vignette,vec3f(1.0/2.2));

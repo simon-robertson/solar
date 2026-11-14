@@ -1,5 +1,5 @@
 import { BODIES, BODY_FLOATS } from "./data.js";
-import { Simulation, toEpochDays, MIN_DAY, MAX_DAY } from "./simulation.js";
+import { Simulation, MIN_DAY, MAX_DAY } from "./simulation.js";
 import { Camera } from "./camera.js";
 import { Renderer } from "./renderer.js";
 import { SATURN_MOONS, PLANET_ORBITS, ORBIT_FLOATS, satelliteVisibility } from "./orbit-details.js";
@@ -19,14 +19,16 @@ if (reducedMotion) simulation.paused = true;
 let selected = -1, running = false, animation = 0, lastTime = 0, lastUI = 0, lastLabels = 0;
 let frames = 0, frameMillis = 0, cpuMillis = 0, validationErrors = 0;
 let width = window.innerWidth, height = window.innerHeight, showLabels = true;
+let compactScene = false;
 let pointer = -1, lastX = 0, lastY = 0, moved = 0;
 let labelsSuppressed = true, labelsQuietSince = 0, labelsFadeStarted = 0, satelliteNamesActive = false;
 const buttons = [], labels = [], satelliteLabels = [];
 const labelBounds = new Float32Array((BODIES.length+SATURN_MOONS.length)*4);
-const annotationPanels = [".header",".intro",".view-controls",".bottom-deck"].map(selector => document.querySelector(selector));
+const annotationPanels = [".header",".intro",".view-controls",".bottom-deck","#settings"].map(selector => document.querySelector(selector));
 const annotationBounds = new Float32Array(annotationPanels.length*4);
 const nav = $("planet-nav");
 const labelsContainer = $("labels");
+const informationPanel = $("information-panel"), infoToggle = $("info-toggle");
 const loadScreen = $("loading");
 const loadingText = $("loading-text");
 const pauseIcon = $("pause-icon"), playIcon = $("play-icon"), pauseButton = $("pause");
@@ -174,9 +176,24 @@ function togglePause() { simulation.paused = !simulation.paused; updatePause(); 
 function reset() { hideMovingLabels(); simulation.reset(); updatePause(); lastUI = 0; }
 function setSettings(open) {
   $("settings").hidden = !open;
+  refreshAnnotationBounds();
   $("settings-open").setAttribute("aria-expanded",String(open));
   if (open) $("settings-close").focus();
   else if ($("settings").contains(document.activeElement)) $("settings-open").focus();
+}
+
+function toggleInformation() {
+  const show = informationPanel.hidden;
+  // Do not leave focus inside a panel that has just been removed from view.
+  if (!show && informationPanel.contains(document.activeElement)) document.activeElement.blur();
+  informationPanel.hidden = !show;
+  document.body.classList.toggle("info-hidden",!show);
+  infoToggle.setAttribute("aria-expanded",String(show));
+  const action = `${show ? "Hide" : "Show"} information panel`;
+  infoToggle.setAttribute("aria-label",action);
+  infoToggle.title = `${action} (Tab)`;
+  hideMovingLabels();
+  resizeScene();
 }
 
 $("overview").addEventListener("click",overview);
@@ -193,6 +210,8 @@ $("reverse").addEventListener("click",() => {
 $("speed").addEventListener("change",event => { simulation.speed = Number(event.target.value) * (simulation.speed<0?-1:1); savePreferences(); });
 $("settings-open").addEventListener("click",() => setSettings($("settings").hidden));
 $("settings-close").addEventListener("click",() => setSettings(false));
+infoToggle.addEventListener("click",toggleInformation);
+document.querySelector(".diagnostics").addEventListener("toggle",refreshAnnotationBounds);
 $("about-open").addEventListener("click",() => $("about").showModal());
 $("about-close").addEventListener("click",() => $("about").close());
 $("about").addEventListener("click",event => { if (event.target===$("about")) { const rect = event.target.getBoundingClientRect(); if (event.clientX<rect.left || event.clientX>rect.right || event.clientY<rect.top || event.clientY>rect.bottom) event.target.close(); } });
@@ -212,10 +231,15 @@ $("fullscreen").addEventListener("click",async () => {
 document.addEventListener("fullscreenchange",() => $("fullscreen").setAttribute("aria-label",document.fullscreenElement?"Exit fullscreen":"Enter fullscreen"));
 
 document.addEventListener("keydown",event => {
+  if (event.key==="Tab" && !event.ctrlKey && !event.altKey && !event.metaKey) {
+    event.preventDefault();
+    if (!event.repeat) toggleInformation();
+    return;
+  }
   if ($("about").open) return;
   if (event.code==="Escape") { setSettings(false); overview(); return; }
   if (/INPUT|SELECT|TEXTAREA/.test(event.target.tagName) || event.target.isContentEditable) return;
-  if (event.code==="Space" && !event.target.closest("button,a")) { event.preventDefault(); togglePause(); }
+  if (event.code==="Space" && !event.target.closest("button,a,summary")) { event.preventDefault(); togglePause(); }
   else if (event.code==="KeyR") reset();
 });
 
@@ -283,7 +307,6 @@ function updateLabelVisibility(now) {
 function updateLabels() {
   if (!showLabels) return;
   const data = simulation.data;
-  const compactScene = canvas.offsetTop>0;
   for (let i = 0; i < labels.length; i++) {
     const box = i*4;
     labelBounds[box] = Infinity;
@@ -295,7 +318,7 @@ function updateLabels() {
     let visible = depth>0 && p[0]>15 && p[0]<width-90 && p[1]>(compactScene?12:112) && p[1]<height-(compactScene?12:210) && radius<height*.36;
     const lx = Math.round(p[0]+radius+9), ly = Math.round(p[1]-4);
     const labelWidth = BODIES[i].name.length*7+24;
-    if (!compactScene && lx < (width<850?235:340) && ly<height-210) visible = false;
+    if (!informationPanel.hidden && !compactScene && lx < (width<850?235:340) && ly<height-210) visible = false;
     // Reuse a fixed bounds buffer to prevent labels from overlapping each other.
     if (visible) {
       for (let j = 0; j < i; j++) {
@@ -329,7 +352,12 @@ function updateLabels() {
 
 function refreshAnnotationBounds() {
   const canvasRect = canvas.getBoundingClientRect();
+  compactScene = canvasRect.top>0;
   for (let i = 0; i < annotationPanels.length; i++) {
+    if (annotationPanels[i].hidden) {
+      annotationBounds.set([Infinity,Infinity,-Infinity,-Infinity],i*4);
+      continue;
+    }
     const rect = annotationPanels[i].getBoundingClientRect(), o = i*4;
     annotationBounds[o] = rect.left-canvasRect.left-15;
     annotationBounds[o+1] = rect.top-canvasRect.top-15;
@@ -362,7 +390,6 @@ function updateSatelliteLabels() {
     return;
   }
   satelliteNamesActive = true;
-  const compactScene = canvas.offsetTop>0;
   for (let i = 0; i < satelliteLabels.length; i++) {
     const label = satelliteLabels[i], box = (BODIES.length+i)*4;
     labelBounds[box] = Infinity;
@@ -405,10 +432,10 @@ function frame(now) {
   const dt = Math.min(.05,Math.max(0,rawDelta));
   simulation.tick(dt);
   camera.update(dt,simulation.data);
+  updateLabelVisibility(now);
   const fade = Math.min(1,Math.max(0,(now-labelsFadeStarted)/350));
   renderer.markerOpacity = labelsSuppressed ? 0 : reducedMotion ? 1 : 1-Math.pow(1-fade,3);
   renderer.render(camera,simulation,selected);
-  updateLabelVisibility(now);
   if (!labelsSuppressed && now-lastLabels>65) { updateLabels(); lastLabels = now; }
   if (!labelsSuppressed) updateSatelliteLabels();
   frames++;
@@ -419,6 +446,7 @@ function frame(now) {
     stats.frame.textContent = `${(frameMillis/Math.max(frames,1)).toFixed(1)} ms`;
     stats.cpu.textContent = `${(cpuMillis/Math.max(frames,1)).toFixed(2)} ms`;
     stats.compute.textContent = renderer.computePasses;
+    stats.draws.textContent = renderer.drawCalls;
     stats.resolution.textContent = `${renderer.width} × ${renderer.height}`;
     stats.delta.textContent = dt.toFixed(4);
     stats.resources.textContent = renderer.resourceGeneration;
@@ -445,17 +473,23 @@ function fail(message) {
   console.error(message);
 }
 
-const resizeObserver = new ResizeObserver(() => {
-  width = canvas.clientWidth; height = canvas.clientHeight;
+function resizeScene() {
+  const nextWidth = canvas.clientWidth, nextHeight = canvas.clientHeight;
+  if (nextWidth!==width || nextHeight!==height) hideMovingLabels();
+  width = nextWidth; height = nextHeight;
   renderer.resize();
   refreshAnnotationBounds();
-});
-document.addEventListener("visibilitychange",() => {
+}
+const resizeObserver = new ResizeObserver(resizeScene);
+function resumeFrameLoop() {
   cancelAnimationFrame(animation); animation = 0; lastTime = 0;
   frames = 0; frameMillis = 0; cpuMillis = 0;
   if (!document.hidden && running) animation = requestAnimationFrame(frame);
-});
-window.addEventListener("pagehide",() => {
+}
+document.addEventListener("visibilitychange",resumeFrameLoop);
+window.addEventListener("pageshow",event => { if (event.persisted) resumeFrameLoop(); });
+window.addEventListener("pagehide",event => {
+  if (event.persisted) { cancelAnimationFrame(animation); animation = 0; return; }
   running = false; cancelAnimationFrame(animation); resizeObserver.disconnect(); renderer.destroy();
 });
 

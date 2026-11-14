@@ -45,8 +45,11 @@ See [GitHub's publishing-source documentation](https://docs.github.com/en/pages/
   This proximity detail fades out when you zoom away; see [orbital detail and LOD](docs/ORBITAL-DETAIL.md).
 - Drag the scene to orbit; scroll to zoom. Click a planet to focus it.
 - Body labels hide during camera movement and fade back in once the camera settles.
+- Tab (or Shift+Tab) shows/hides the information panel instead of moving focus.
+  The panel button in the header provides the same toggle on touch devices.
 - Space pauses/resumes; R resets the simulation date to today; Escape returns to
-  system view. Shortcuts leave form controls and dialogs alone.
+  system view. These playback/navigation shortcuts leave form controls and
+  dialogs alone; the panel's Tab shortcut works throughout the app.
 - Change speed or reverse time in the bottom bar.
 - Render settings control orbital paths, labels, atmospheres, bloom, exposure
   and resolution. Expand **Rendering diagnostics** for live rendering diagnostics.
@@ -67,20 +70,29 @@ advance deterministic orbits from delta time in seconds; keep steady rendering
 draws low; reuse frame state; and verify both orbital equations and actual GPU
 pixel output.
 
-Each steady frame has **two draw calls**, both fullscreen triangles:
+Each steady frame has **2–4 draw calls**, below the budget of ten:
 
 1. A WGSL fragment shader casts camera rays against the ten spheres, samples a
    mipmapped texture array, shades the nearest hit and evaluates finite-Sun
    visibility against the other bodies. Saturn's textured ring plane participates in
    occlusion and shadow casting. Earth has clouds, night lights and ocean specular
-   highlights. Stars, orbital paths and bounded single-scattering atmospheres are evaluated
+   highlights. Stars and bounded single-scattering atmospheres are evaluated
    in the same shader. Output is linear HDR (`rgba16float`).
-2. The composite shader adds bloom, applies an ACES-style tone curve, a vignette
+2. When paths are enabled, one instanced draw renders all ellipses as thin,
+   antialiased ribbons, clipped before perspective division. A shared static unit
+   circle avoids per-frame meshes and repeated vertex trigonometry.
+3. When nearby Saturn detail is visible, one instanced draw renders its hollow
+   moon circles. Paths and circles share the scene pass, preserve sphere/ring
+   occlusion, and shade only covered pixels.
+4. The composite shader adds bloom, applies an ACES-style tone curve, a vignette
    and display gamma.
 
 Bloom uses **three compute dispatches in one compute pass**: half-resolution
 threshold/downsample and horizontal/vertical blur. Turning bloom off skips these
-dispatches. No shadow maps, planet meshes, per-planet draws or depth buffer.
+dispatches and the composite's bloom sample. The same Gaussian blur weights are
+precomputed and normalized. No shadow maps, planet meshes, per-planet draws or
+depth buffer. See [the rendering review](docs/RENDERING-REVIEW.md) for validation
+and measured before/after costs.
 
 Texture initialization checks the device’s dimension and array-layer limits, then
 tries the original 2048 × 1024 maps and 2048 × 125 Saturn ring. If texture allocation,
@@ -99,9 +111,10 @@ texture aliasing. **Rendering diagnostics → Texture maps** reports the chosen 
 `requestAnimationFrame` produces a seconds-based delta. A 50 ms cap avoids large
 simulation jumps after stalls. Rendering stops while the document is hidden, and
 the previous timestamp resets on resume. A cached date object and formatter serve
-the UI at 2 Hz; labels update at roughly 15 Hz. The hot path reuses:
+the UI at 2 Hz; planet labels update at roughly 15 Hz, visible moon labels each
+frame. Paused body and moon orbital calculations are cached. The hot path reuses:
 
-- One `Float32Array` of body state, one of uniforms and the camera's vectors.
+- Typed arrays of body/orbit state, uniforms and the camera's vectors.
 - GPU uniform/storage buffers, pipelines, bind groups, textures and samplers.
 - Render-pass descriptors, attachments and the queue-submission array.
 - DOM labels and controls created once at startup.
@@ -187,12 +200,13 @@ offset relative to the selected body, so zoom settling never triggers a snap.
 Texture-allocation tests cover native 2K selection, dimension limits, immediate
 and deferred out-of-memory fallback, resource cleanup, and unrelated failures.
 
-Open **http://127.0.0.1:3000/verify.html** to run 31 checks on the actual GPU:
+Open **http://127.0.0.1:3000/verify.html** to run 32 checks on the actual GPU:
 texture profiles, final mip contents, resolution-dependent LOD, atmosphere geometry,
 optical depth and attenuation against independent numerical references,
 night-side/eclipsed atmosphere suppression, foreground/ring occlusion,
 production-shader compilation, pixel-readback sunlight/eclipses/background tests,
-frame-resource reuse, resolution rebuilds, bloom dispatch counts and WebGPU
+frame-resource reuse, resolution rebuilds, Gaussian blur against an independent
+double-precision convolution, bloom dispatch counts and WebGPU
 validation. The controlled shadow test moves the Moon between the Sun and Earth's
 visible lit surface, measures the brightness reduction, then moves it away and
 checks that illumination returns. Additional tests exercise the production WGSL

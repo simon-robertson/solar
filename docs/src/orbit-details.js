@@ -19,6 +19,7 @@ export const SATURN_MOONS = Object.freeze([
   { name: "Iapetus",    elements: [3561700,.028,254.5,74.8,7.6,86.5,79.331002,288.7,78.9] },
 ]);
 export const ORBIT_COUNT = PLANET_ORBITS+SATURN_MOONS.length;
+export const ORBIT_SEGMENTS = 1024;
 export const compressedMoonRadius = km => BODIES[SATURN_INDEX].radius*(2.65+2.35*Math.log(km/150000));
 
 const cross = (a,b) => [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
@@ -48,11 +49,19 @@ export class OrbitDetails {
   constructor() {
     this.data = new Float32Array(ORBIT_COUNT*ORBIT_FLOATS);
     this.positions = new Float64Array(SATURN_MOONS.length*3);
+    this.relativePositions = new Float64Array(SATURN_MOONS.length*3);
+    this.moonDays = NaN;
     this.axes = SATURN_MOONS.map(moon => new Float64Array(moonAxes(moon.elements)));
     this.radii = new Float64Array(SATURN_MOONS.map(moon => compressedMoonRadius(moon.elements[0])));
     this.saturnLod = new ProximityLod();
+    for (let i = 0; i < SATURN_MOONS.length; i++) {
+      const o = (PLANET_ORBITS+i)*ORBIT_FLOATS, axes = this.axes[i];
+      this.data.set(axes.subarray(0,3),o); this.data.set(axes.subarray(3),o+4);
+      this.data[o+3] = this.radii[i]; this.data[o+7] = SATURN_MOONS[i].elements[1];
+      this.data[o+15] = -1;
+    }
   }
-  update(simulation,camera) {
+  update(simulation,camera,aspect = 1) {
     const bodies = simulation.data, out = this.data;
     const direction = simulation.speed<0 ? -1 : 1;
     for (let i = 1; i < BODIES.length; i++) {
@@ -65,25 +74,37 @@ export class OrbitDetails {
       out[o+13] = direction; out[o+14] = 0; out[o+15] = i;
     }
     const parent = SATURN_INDEX*BODY_FLOATS, radius = BODIES[SATURN_INDEX].radius;
-    const distance = Math.hypot(camera.eye[0]-bodies[parent],camera.eye[1]-bodies[parent+1],camera.eye[2]-bodies[parent+2])/radius;
-    const opacity = this.saturnLod.update(distance,simulation.deltaSeconds);
-    // Trade global context for local detail, rather than drawing distant
-    // heliocentric tracks across the close-up moon system.
-    for (let i = 0; i < PLANET_ORBITS; i++) out[i*ORBIT_FLOATS+11] = 1-opacity;
+    const dx = bodies[parent]-camera.eye[0], dy = bodies[parent+1]-camera.eye[1], dz = bodies[parent+2]-camera.eye[2];
+    const distance = Math.hypot(dx,dy,dz)/radius;
+    // Compressed planetary distances can put an Earth close-up inside Saturn's
+    // distance threshold, even with Saturn behind the camera. Require the parent
+    // in view too; retain a wider exit margin to avoid edge chatter while panning.
+    const depth = dx*camera.forward[0]+dy*camera.forward[1]+dz*camera.forward[2];
+    const limit = this.saturnLod.active ? 1.2 : 1.05;
+    const inView = depth>0 &&
+      Math.abs((dx*camera.right[0]+dy*camera.right[1]+dz*camera.right[2])/(depth*camera.tanFov*aspect)+.18)<limit &&
+      Math.abs((dx*camera.up[0]+dy*camera.up[1]+dz*camera.up[2])/(depth*camera.tanFov))<limit;
+    const opacity = this.saturnLod.update(inView ? distance : Infinity,simulation.deltaSeconds);
+    // Local detail must never change the visibility of unrelated planet paths.
+    const advance = simulation.days!==this.moonDays;
     for (let i = 0; i < SATURN_MOONS.length; i++) {
       const o = (PLANET_ORBITS+i)*ORBIT_FLOATS;
       out[o+11] = opacity;
       if (opacity===0) continue; // No moon Kepler work while this detail layer is absent.
-      const elements = SATURN_MOONS[i].elements, e = elements[1], axes = this.axes[i];
-      const a = this.radii[i], anomaly = solveKepler((elements[3]/360+(simulation.days%elements[6])/elements[6])*TAU,e);
-      const x = a*(Math.cos(anomaly)-e), y = a*Math.sqrt(1-e*e)*Math.sin(anomaly);
-      for (let j = 0; j < 3; j++) {
-        out[o+j] = axes[j]; out[o+4+j] = axes[3+j]; out[o+8+j] = bodies[parent+j];
-        this.positions[i*3+j] = bodies[parent+j]+axes[j]*x+axes[j+3]*y;
+      if (advance) {
+        const elements = SATURN_MOONS[i].elements, e = elements[1], axes = this.axes[i];
+        const a = this.radii[i], anomaly = solveKepler((elements[3]/360+(simulation.days%elements[6])/elements[6])*TAU,e);
+        const x = a*(Math.cos(anomaly)-e), y = a*Math.sqrt(1-e*e)*Math.sin(anomaly);
+        for (let j = 0; j < 3; j++) this.relativePositions[i*3+j] = axes[j]*x+axes[j+3]*y;
+        out[o+12] = anomaly;
       }
-      out[o+3] = a; out[o+7] = e; out[o+12] = anomaly; out[o+13] = direction;
-      out[o+14] = 1; out[o+15] = -1;
+      for (let j = 0; j < 3; j++) {
+        out[o+8+j] = bodies[parent+j];
+        this.positions[i*3+j] = bodies[parent+j]+this.relativePositions[i*3+j];
+      }
+      out[o+13] = direction; out[o+14] = 1;
     }
+    if (opacity>0) this.moonDays = simulation.days;
   }
 }
 

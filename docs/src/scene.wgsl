@@ -79,8 +79,8 @@ const SUN_SAMPLES = array<vec2f, 32>(
 fn sphereHit(ro: vec3f, rd: vec3f, center: vec3f, radius: f32) -> f32 {
   let oc = ro - center;
   let b = dot(oc, rd);
-  let c = dot(oc, oc) - radius * radius;
-  let h = b * b - c;
+  let closest = oc-rd*b;
+  let h = radius*radius-dot(closest,closest);
   if (h < 0.0) { return FAR; }
   let root = sqrt(h);
   let near = -b - root;
@@ -236,80 +236,130 @@ fn stars(rd: vec3f) -> vec3f {
   return result;
 }
 
-// Screen-space curve coverage: differentiate the implicit ellipse through the
-// ray/plane intersection so foreshortening does not change the apparent width.
+// Finite, instanced ribbons avoid the projective pole of a ray/ellipse-plane
+// distance estimate. Both near-plane and viewport clipping happen before divide.
+@group(0) @binding(6) var<storage, read> orbitPoints: array<vec2f>;
+override ORBIT_SEGMENTS: u32 = 1024u;
+struct OrbitVertex {
+  @builtin(position) position: vec4f,
+  @location(0) @interpolate(flat) start: vec4f, // screen xy, inverse depth, anomaly
+  @location(1) @interpolate(flat) end: vec4f,
+  @location(2) @interpolate(flat) style: vec4f, // opacity, phase, direction, emphasis
+  @location(3) @interpolate(flat) marker: u32,
+}
+fn emptyOrbitVertex() -> OrbitVertex {
+  return OrbitVertex(vec4f(2.0,2.0,0.0,1.0),vec4f(0.0),vec4f(0.0),vec4f(0.0),0u);
+}
 fn orbitTrail(phase: f32, angle: f32, direction: f32) -> f32 {
   let lag = fract(direction*(phase-angle)/TAU+1.0);
   return pow(1.0-smoothstep(0.0,0.8,lag),1.5);
 }
-fn orbitLines(ro: vec3f, rd: vec3f, nearest: f32, ringDepth: f32) -> vec3f {
-  var color = vec3f(0.0);
-  if (camera.viewport.w<0.5) { return color; }
-  let ratio = max(camera.effects.z,0.001);
-  for (var i = 0u; i<arrayLength(&orbits); i++) {
-    let orbit = orbits[i];
-    if (orbit.center.w<=0.0) { continue; }
-    let normal = cross(orbit.axisA.xyz,orbit.axisB.xyz);
-    let denominator = dot(rd,normal);
-    if (abs(denominator)<0.0001) { continue; }
-    let t = dot(orbit.center.xyz-ro,normal)/denominator;
-    if (t<=0.0 || t>nearest) { continue; }
-    let point = ro+rd*t-orbit.center.xyz;
-    let a = orbit.axisA.w;
-    let e = orbit.axisB.w;
-    let b = a*sqrt(1.0-e*e);
-    let q = vec2f(dot(point,orbit.axisA.xyz)/a+e,dot(point,orbit.axisB.xyz)/b);
-    let gradient = q.x/a*orbit.axisA.xyz+q.y/b*orbit.axisB.xyz;
-    let pixelScale = t*2.0*camera.eye.w/camera.viewport.y*max(dot(rd,camera.forward.xyz),0.0001);
-    let dx = (camera.right.xyz-rd*dot(camera.right.xyz,normal)/denominator)*pixelScale;
-    let dy = (camera.up.xyz-rd*dot(camera.up.xyz,normal)/denominator)*pixelScale;
-    let distance = abs(0.5*(dot(q,q)-1.0))/max(length(vec2f(dot(gradient,dx),dot(gradient,dy))),0.000001);
-    let trail = orbitTrail(orbit.phase.x,atan2(q.y,q.x),orbit.phase.y);
-    let selected = orbit.phase.w>=0.0 && abs(camera.viewport.z-orbit.phase.w)<0.1;
-    let halfWidth = 0.38*ratio;
-    if (distance>halfWidth+0.7) { continue; }
-    var alpha = (1.0-smoothstep(max(0.0,halfWidth-0.7),halfWidth+0.7,distance))*orbit.center.w;
-    if (ringDepth<t) {
-      let opacity = textureSampleLevel(ringMap,mapSampler,vec2f(ringUV(ro+rd*ringDepth),0.5),0.0).a;
-      alpha *= 1.0-opacity;
-    }
-    let ink = mix(vec3f(0.026,0.025,0.020),vec3f(0.29,0.265,0.19),trail);
-    color += ink*alpha*select(0.85,1.1,selected);
-  }
-  return color;
+fn orbitPoint(orbit: Orbit, point: vec2f) -> vec3f {
+  let a = orbit.axisA.w;
+  let e = orbit.axisB.w;
+  return orbit.center.xyz+orbit.axisA.xyz*a*(point.x-e)+orbit.axisB.xyz*a*sqrt(1.0-e*e)*point.y;
 }
-
-// Hollow annotations, never spheres: screen-pixel radius is independent of the
-// body's actual size and camera zoom. The existing depth/ring coverage hides
-// portions behind foreground objects without adding a render pass or pick target.
-fn satelliteMarkers(ro: vec3f, rd: vec3f, frag: vec2f, nearest: f32, ringDepth: f32) -> vec3f {
-  var color = vec3f(0.0);
-  if (camera.effects.w<=0.0) { return color; }
-  let ratio = max(camera.effects.z,0.001);
-  for (var i = 0u; i<arrayLength(&orbits); i++) {
-    let orbit = orbits[i];
-    if (orbit.phase.z<0.5 || orbit.center.w<=0.0) { continue; }
-    let a = orbit.axisA.w;
-    let e = orbit.axisB.w;
-    let anomaly = orbit.phase.x;
-    let position = orbit.center.xyz+orbit.axisA.xyz*a*(cos(anomaly)-e)+orbit.axisB.xyz*a*sqrt(1.0-e*e)*sin(anomaly);
-    let delta = position-ro;
-    let depth = dot(delta,camera.forward.xyz);
-    let rayDepth = dot(delta,rd);
-    if (depth<=0.0 || rayDepth>nearest) { continue; }
-    let screen = vec2f(
-      (dot(delta,camera.right.xyz)/(depth*camera.eye.w*camera.right.w)+1.18)*camera.viewport.x*0.5,
-      (1.0-dot(delta,camera.up.xyz)/(depth*camera.eye.w))*camera.viewport.y*0.5);
-    let edge = abs(length(frag-screen)-11.0*ratio);
-    if (edge>1.5*ratio) { continue; }
-    var alpha = (1.0-smoothstep(0.7*ratio,1.5*ratio,edge))*orbit.center.w*camera.effects.w;
-    if (ringDepth<rayDepth) {
-      let opacity = textureSampleLevel(ringMap,mapSampler,vec2f(ringUV(ro+rd*ringDepth),0.5),0.0).a;
-      alpha *= 1.0-opacity;
-    }
-    color += vec3f(0.5,0.48,0.41)*alpha;
+fn orbitClipPosition(point: vec3f) -> vec3f {
+  let delta = point-camera.eye.xyz;
+  let z = dot(delta,camera.forward.xyz);
+  return vec3f(dot(delta,camera.right.xyz)/(camera.eye.w*camera.right.w)+0.18*z,
+    dot(delta,camera.up.xyz)/camera.eye.w,z);
+}
+fn orbitScreen(point: vec3f) -> vec2f {
+  return (point.xy/point.z*vec2f(1.0,-1.0)+1.0)*camera.viewport.xy*0.5;
+}
+fn orbitClipSegment(a: vec3f, b: vec3f) -> vec2f {
+  let margin = 4.0*max(camera.effects.z,0.001)/camera.viewport.xy;
+  let extent = 1.0+margin;
+  let da = array<f32,5>(a.z-0.001,a.x+extent.x*a.z,extent.x*a.z-a.x,a.y+extent.y*a.z,extent.y*a.z-a.y);
+  let db = array<f32,5>(b.z-0.001,b.x+extent.x*b.z,extent.x*b.z-b.x,b.y+extent.y*b.z,extent.y*b.z-b.y);
+  var lo = 0.0;
+  var hi = 1.0;
+  for (var i = 0u; i<5u; i++) {
+    if (da[i]<0.0 && db[i]<0.0) { return vec2f(1.0,0.0); }
+    if (da[i]<0.0) { lo = max(lo,da[i]/(da[i]-db[i])); }
+    if (db[i]<0.0) { hi = min(hi,da[i]/(da[i]-db[i])); }
   }
-  return color;
+  return vec2f(lo,hi);
+}
+fn orbitCorner(index: u32) -> vec2f {
+  let corners = array<vec2f,6>(vec2f(0.0,-1.0),vec2f(1.0,-1.0),vec2f(0.0,1.0),vec2f(0.0,1.0),vec2f(1.0,-1.0),vec2f(1.0,1.0));
+  return corners[index%6u];
+}
+@vertex fn orbitVertex(@builtin(vertex_index) index: u32, @builtin(instance_index) instance: u32) -> OrbitVertex {
+  let orbit = orbits[instance];
+  if (orbit.center.w<=0.0 || camera.viewport.w<0.5) { return emptyOrbitVertex(); }
+  let segment = index/6u;
+  let a = orbitClipPosition(orbitPoint(orbit,orbitPoints[segment]));
+  let b = orbitClipPosition(orbitPoint(orbit,orbitPoints[segment+1u]));
+  let clip = orbitClipSegment(a,b);
+  if (clip.x>=clip.y) { return emptyOrbitVertex(); }
+  let ca = mix(a,b,clip.x);
+  let cb = mix(a,b,clip.y);
+  let start = orbitScreen(ca);
+  let end = orbitScreen(cb);
+  let delta = end-start;
+  let lengthSquared = dot(delta,delta);
+  if (lengthSquared<0.00000001) { return emptyOrbitVertex(); }
+  let normal = vec2f(-delta.y,delta.x)*inverseSqrt(lengthSquared);
+  let corner = orbitCorner(index);
+  let halfWidth = 0.38*max(camera.effects.z,0.001);
+  let screen = mix(start,end,corner.x)+normal*corner.y*(halfWidth+0.7);
+  let step = TAU/f32(ORBIT_SEGMENTS);
+  let phase = f32(segment)*step;
+  let selected = orbit.phase.w>=0.0 && abs(camera.viewport.z-orbit.phase.w)<0.1;
+  return OrbitVertex(vec4f(screen/camera.viewport.xy*vec2f(2.0,-2.0)+vec2f(-1.0,1.0),0.0,1.0),
+    vec4f(start,1.0/ca.z,phase+clip.x*step),vec4f(end,1.0/cb.z,phase+clip.y*step),
+    vec4f(orbit.center.w,orbit.phase.xy,select(0.85,1.1,selected)),0u);
+}
+@vertex fn markerVertex(@builtin(vertex_index) index: u32, @builtin(instance_index) instance: u32) -> OrbitVertex {
+  let orbit = orbits[instance];
+  if (orbit.center.w<=0.0 || orbit.phase.z<0.5 || camera.effects.w<=0.0) { return emptyOrbitVertex(); }
+  let p = orbitClipPosition(orbitPoint(orbit,vec2f(cos(orbit.phase.x),sin(orbit.phase.x))));
+  if (p.z<=0.001) { return emptyOrbitVertex(); }
+  let center = orbitScreen(p);
+  let ratio = max(camera.effects.z,0.001);
+  let corner = orbitCorner(index);
+  let screen = center+vec2f(corner.x*2.0-1.0,corner.y)*12.5*ratio;
+  return OrbitVertex(vec4f(screen/camera.viewport.xy*vec2f(2.0,-2.0)+vec2f(-1.0,1.0),0.0,1.0),
+    vec4f(center,1.0/p.z,11.0*ratio),vec4f(0.0),vec4f(orbit.center.w*camera.effects.w,0.0,0.0,1.0),1u);
+}
+// Only covered line/circle fragments evaluate depth. No extra full-screen pass,
+// depth texture, per-planet draw or per-frame geometry upload is required.
+@fragment fn orbitFragment(input: OrbitVertex) -> @location(0) vec4f {
+  let pixel = input.position.xy;
+  let ratio = max(camera.effects.z,0.001);
+  var inverseDepth = input.start.z;
+  var coverage = 0.0;
+  var ink = vec3f(0.5,0.48,0.41);
+  if (input.marker==1u) {
+    let edge = abs(length(pixel-input.start.xy)-input.start.w);
+    coverage = 1.0-smoothstep(0.7*ratio,1.5*ratio,edge);
+  } else {
+    let delta = input.end.xy-input.start.xy;
+    let t = clamp(dot(pixel-input.start.xy,delta)/max(dot(delta,delta),0.00000001),0.0,1.0);
+    let edge = length(pixel-mix(input.start.xy,input.end.xy,t));
+    let halfWidth = 0.38*ratio;
+    coverage = 1.0-smoothstep(max(0.0,halfWidth-0.7),halfWidth+0.7,edge);
+    inverseDepth = mix(input.start.z,input.end.z,t);
+    let anomaly = mix(input.start.w*input.start.z,input.end.w*input.end.z,t)/inverseDepth;
+    let trail = orbitTrail(input.style.y,anomaly,input.style.z);
+    ink = mix(vec3f(0.026,0.025,0.020),vec3f(0.29,0.265,0.19),trail)*input.style.w;
+  }
+  if (coverage<=0.0) { discard; }
+  let ndc = vec2f(pixel.x/camera.viewport.x*2.0-1.18,1.0-pixel.y/camera.viewport.y*2.0);
+  let rd = normalize(camera.forward.xyz+camera.eye.w*(ndc.x*camera.right.w*camera.right.xyz+ndc.y*camera.up.xyz));
+  let ro = camera.eye.xyz;
+  let depth = 1.0/(inverseDepth*max(dot(rd,camera.forward.xyz),0.000001));
+  for (var i = 0u; i<arrayLength(&bodies); i++) {
+    if (sphereHit(ro,rd,bodies[i].sphere.xyz,bodies[i].sphere.w)<depth) { discard; }
+  }
+  let ringDepth = ringIntersection(ro,rd);
+  if (ringDepth<depth) {
+    let opacity = textureSampleLevel(ringMap,mapSampler,vec2f(ringUV(ro+rd*ringDepth),0.5),0.0).a;
+    coverage *= 1.0-opacity;
+  }
+  return vec4f(ink*coverage*input.style.x,0.0);
 }
 
 // Atmosphere calculations use planet radii as the length unit. RGB stores
@@ -469,7 +519,7 @@ fn compositeRingAtmospheres(background: vec3f, ro: vec3f, rd: vec3f, nearest: f3
     let t = sphereHit(ro, rd, bodies[i].sphere.xyz, bodies[i].sphere.w);
     if (t < nearest) { nearest = t; hit = i32(i); }
   }
-  var color = stars(rd);
+  var color = vec3f(0.0);
   if (hit >= 0) {
     let body = bodies[hit];
     let point = ro + rd * nearest;
@@ -498,10 +548,8 @@ fn compositeRingAtmospheres(background: vec3f, ro: vec3f, rd: vec3f, nearest: f3
       }
     }
   }
-  let ringT = ringIntersection(ro,rd);
+  if (hit<0) { color = stars(rd); }
   color = compositeRingAtmospheres(color,ro,rd,nearest);
-  color += orbitLines(ro,rd,nearest,ringT);
-  color += satelliteMarkers(ro,rd,frag.xy,nearest,ringT);
   // A warm solar aureole, hidden by any foreground planet (including eclipses).
   let sunVector = bodies[0].sphere.xyz-ro;
   let sunT = dot(sunVector,rd);

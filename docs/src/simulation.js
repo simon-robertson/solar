@@ -41,10 +41,11 @@ export class Simulation {
       this.days = Math.min(MAX_DAY, Math.max(MIN_DAY, this.days + dt * this.speed));
       if (this.days === MIN_DAY || this.days === MAX_DAY) this.paused = true;
     }
-    this.updateBodies();
+    if (this.days!==this.bodyDays) this.updateBodies();
   }
 
   updateBodies() {
+    this.bodyDays = this.days;
     const out = this.data;
     const centuries = this.days / 36525;
     for (let i = 0; i < BODIES.length; i++) {

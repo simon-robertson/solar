@@ -20,13 +20,14 @@
     <span class="header-note">SOLAR SYSTEM EXPLORER</span>
     <div class="header-actions">
       <span id="gpu-status" class="gpu-status"><i></i> INTERACTIVE MODEL</span>
+      <button id="info-toggle" class="icon-button" aria-label="Hide information panel" aria-controls="information-panel" aria-expanded="true" aria-keyshortcuts="Tab" title="Hide information panel (Tab)"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15"/><path d="M10 4.5v15M6.5 8h1M6.5 11h1M6.5 14h1"/></svg></button>
       <button id="about-open" class="icon-button" aria-label="About Solar" title="About Solar"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v6m0-10v1"/></svg></button>
       <button id="settings-open" class="icon-button" aria-label="Render settings" aria-expanded="false" title="Render settings"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="16" cy="17" r="3"/></svg></button>
     </div>
   </header>
 
   <main>
-    <section class="intro" aria-live="polite">
+    <section id="information-panel" class="intro" aria-live="polite">
       <div class="eyebrow"><span class="accent-line"></span><span id="body-kind">SYSTEM OVERVIEW</span></div>
       <h1 id="body-name">Solar <br>system</h1>
       <p id="body-description">Explore the Sun, eight planets and the Moon. Select a body to inspect its surface and orbit.</p>
@@ -51,7 +52,7 @@
       <label class="switch-row" for="bloom"><span>Solar bloom</span><input type="checkbox" id="bloom" checked><span class="switch" aria-hidden="true"></span></label>
       <label class="setting-select" for="quality">Resolution <select id="quality"><option value="0.7">Performance</option><option value="1" selected>Balanced</option><option value="1.35">High</option></select></label>
       <label class="exposure-label" for="exposure">Exposure <input type="range" id="exposure" min="0.3" max="2" step="0.05" value="1.15"></label>
-      <details class="diagnostics"><summary>Rendering diagnostics <span>+</span></summary><dl><dt>Frame rate</dt><dd id="stat-fps">—</dd><dt>Frame interval</dt><dd id="stat-frame">—</dd><dt>CPU submission</dt><dd id="stat-cpu">—</dd><dt>Render draws / frame</dt><dd id="stat-draws">2</dd><dt>Compute dispatches</dt><dd id="stat-compute">3</dd><dt>Resolution</dt><dd id="stat-resolution">—</dd><dt>Texture maps</dt><dd id="stat-textures">—</dd><dt>Delta (seconds)</dt><dd id="stat-delta">—</dd><dt>Target rebuilds</dt><dd id="stat-resources">—</dd><dt>GPU validation errors</dt><dd id="stat-errors">0</dd></dl><p>One fullscreen triangle per render pass. Planet state, uniforms and bind groups are reused.</p></details>
+      <details class="diagnostics"><summary>Rendering diagnostics <span>+</span></summary><dl><dt>Frame rate</dt><dd id="stat-fps">—</dd><dt>Frame interval</dt><dd id="stat-frame">—</dd><dt>CPU submission</dt><dd id="stat-cpu">—</dd><dt>Render draws / frame</dt><dd id="stat-draws">—</dd><dt>Compute dispatches</dt><dd id="stat-compute">3</dd><dt>Resolution</dt><dd id="stat-resolution">—</dd><dt>Texture maps</dt><dd id="stat-textures">—</dd><dt>Delta (seconds)</dt><dd id="stat-delta">—</dd><dt>Target rebuilds</dt><dd id="stat-resources">—</dd><dt>GPU validation errors</dt><dd id="stat-errors">0</dd></dl><p>Analytic bodies with batched paths and moon circles. Buffers, pipelines and bind groups are reused.</p></details>
     </aside>
 
     <section class="bottom-deck" aria-label="Exploration controls">
@@ -70,7 +71,7 @@
     <div class="eyebrow"><span class="accent-line"></span>ABOUT SOLAR</div>
     <h2 id="about-title">The model</h2>
     <p>Solar is an interactive model of the Sun, eight planets and the Moon. Saturn’s seven major moons appear as markers in close views.</p>
-    <p>Drag to orbit the camera. Scroll to zoom. Select a body for a closer view. Press <kbd>Space</kbd> to pause, <kbd>R</kbd> to return to today, or <kbd>Esc</kbd> to return to the system view.</p>
+    <p>Drag to orbit the camera. Scroll to zoom. Select a body for a closer view. Press <kbd>Tab</kbd> or use the panel button in the header to show or hide the information panel. Press <kbd>Space</kbd> to pause, <kbd>R</kbd> to return to today, or <kbd>Esc</kbd> to return to the system view.</p>
     <h3>Scale & orbital model</h3>
     <p>Sizes and distances are compressed independently for visibility. Planets use JPL’s approximate Keplerian elements for 1800–2050; Earth uses the Earth–Moon barycentre. The Moon follows a simplified ellipse. This is an illustrative orrery, not an ephemeris or an N-body simulation. Dates stop at the model’s limits.</p>
     <h3>Sources & imagery</h3>

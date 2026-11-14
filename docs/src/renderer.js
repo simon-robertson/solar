@@ -1,5 +1,5 @@
 import { BODIES } from "./data.js";
-import { OrbitDetails } from "./orbit-details.js";
+import { OrbitDetails, ORBIT_COUNT, ORBIT_SEGMENTS } from "./orbit-details.js";
 import { allocatePlanetTextures, MAP_LAYERS } from "./textures.js";
 
 const shaderURL = name => new URL(`./${name}.wgsl`, import.meta.url);
@@ -35,7 +35,7 @@ export class Renderer {
     this.scale = 1;
     this.bloom = true; this.atmospheres = true; this.orbits = true;
     this.exposure = 1.15;
-    this.drawCalls = 2; this.computePasses = 3;
+    this.drawCalls = 0; this.computePasses = 0;
     this.resourceGeneration = 0;
     this.disposed = false;
     // Reuse all JS descriptors/arrays in the hot path. GPU encoders and the
@@ -55,7 +55,7 @@ export class Renderer {
     if (!adapter) throw new Error("A WebGPU adapter could not be found. Try a browser with WebGPU support and hardware acceleration enabled.");
     this.device = await adapter.requestDevice();
     const device = this.device;
-    device.addEventListener("uncapturederror", event => this.onError(event.error.message));
+    device.addEventListener("uncapturederror", event => { if (!this.disposed) this.onError(event.error.message); });
     device.lost.then(info => { if (!this.disposed) this.onError(`Graphics device lost: ${info.message || info.reason}. Reload to reconnect.`); });
     this.adapterName = adapter.info?.description || adapter.info?.architecture || "WebGPU";
     this.context = this.canvas.getContext("webgpu");
@@ -65,6 +65,14 @@ export class Renderer {
     this.uniformBuffer = device.createBuffer({ label: "Reusable camera", size: 96, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.bodyBuffer = device.createBuffer({ label: "Reusable body state", size: bodyData.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.orbitBuffer = device.createBuffer({ label: "Reusable orbital detail state", size: this.orbitDetails.data.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+    // Reuse one unit circle for every path. No per-frame meshes or GPU trig.
+    const points = new Float32Array((ORBIT_SEGMENTS+1)*2);
+    for (let i = 0; i <= ORBIT_SEGMENTS; i++) {
+      const angle = i/ORBIT_SEGMENTS*Math.PI*2;
+      points[i*2] = Math.cos(angle); points[i*2+1] = Math.sin(angle);
+    }
+    this.orbitPoints = device.createBuffer({ label: "Static orbit circle", size: points.byteLength, usage: GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST });
+    device.queue.writeBuffer(this.orbitPoints,0,points);
     this.mapSampler = device.createSampler({ label: "Planet sampler", magFilter: "linear", minFilter: "linear", mipmapFilter: "linear", addressModeU: "repeat", addressModeV: "clamp-to-edge" });
     this.linearSampler = device.createSampler({ magFilter: "linear", minFilter: "linear" });
 
@@ -72,13 +80,31 @@ export class Renderer {
     const [scene, post, composite, mipmap] = await Promise.all([
       shader(device,"scene"),shader(device,"post"),shader(device,"composite"),shader(device,"mipmap"),
     ]);
-    const [scenePipeline, finalPipeline, extract, blurX, blurY, mipPipeline] = await Promise.all([
-      device.createRenderPipelineAsync({ label: "Spheres, shadows, rings and atmospheres", layout: "auto", vertex: { module: scene, entryPoint: "vertex" }, fragment: { module: scene, entryPoint: "fragment", targets: [{ format: "rgba16float" }] }, primitive: { topology: "triangle-list" } }),
+    const stages = GPUShaderStage.VERTEX|GPUShaderStage.FRAGMENT;
+    const sceneLayout = device.createBindGroupLayout({ entries: [
+      { binding: 0, visibility: stages, buffer: { type: "uniform" } },
+      { binding: 1, visibility: stages, buffer: { type: "read-only-storage" } },
+      { binding: 2, visibility: GPUShaderStage.FRAGMENT, texture: { viewDimension: "2d-array" } },
+      { binding: 3, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } },
+      { binding: 4, visibility: GPUShaderStage.FRAGMENT, texture: { viewDimension: "2d" } },
+      { binding: 5, visibility: stages, buffer: { type: "read-only-storage" } },
+      { binding: 6, visibility: GPUShaderStage.VERTEX, buffer: { type: "read-only-storage" } },
+    ] });
+    const scenePipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [sceneLayout] });
+    const orbitTarget = { format: "rgba16float", blend: {
+      color: { srcFactor: "one", dstFactor: "one", operation: "add" },
+      alpha: { srcFactor: "zero", dstFactor: "one", operation: "add" },
+    } };
+    const [scenePipeline, orbitPipeline, markerPipeline, finalPipeline, extract, blurX, blurY, mipPipeline] = await Promise.all([
+      device.createRenderPipelineAsync({ label: "Spheres, shadows, rings and atmospheres", layout: scenePipelineLayout, vertex: { module: scene, entryPoint: "vertex" }, fragment: { module: scene, entryPoint: "fragment", targets: [{ format: "rgba16float" }] }, primitive: { topology: "triangle-list" } }),
+      device.createRenderPipelineAsync({ label: "Batched orbit ribbons", layout: scenePipelineLayout, vertex: { module: scene, entryPoint: "orbitVertex", constants: { ORBIT_SEGMENTS } }, fragment: { module: scene, entryPoint: "orbitFragment", targets: [orbitTarget] } }),
+      device.createRenderPipelineAsync({ label: "Batched moon circles", layout: scenePipelineLayout, vertex: { module: scene, entryPoint: "markerVertex" }, fragment: { module: scene, entryPoint: "orbitFragment", targets: [orbitTarget] } }),
       device.createRenderPipelineAsync({ label: "Final composite", layout: "auto", vertex: { module: composite, entryPoint: "vertex" }, fragment: { module: composite, entryPoint: "fragment", targets: [{ format: this.format }] }, primitive: { topology: "triangle-list" } }),
       ...["extract","blurX","blurY"].map(entryPoint => device.createComputePipelineAsync({ label: entryPoint, layout: "auto", compute: { module: post, entryPoint } })),
       device.createRenderPipelineAsync({ label: "Startup mipmaps", layout: "auto", vertex: { module: mipmap, entryPoint: "vertex" }, fragment: { module: mipmap, entryPoint: "fragment", targets: [{ format: "rgba8unorm-srgb" }] } }),
     ]);
     this.scenePipeline = scenePipeline; this.finalPipeline = finalPipeline;
+    this.orbitPipeline = orbitPipeline; this.markerPipeline = markerPipeline;
     this.extractPipeline = extract; this.blurXPipeline = blurX; this.blurYPipeline = blurY;
     const textures = await allocatePlanetTextures(device,async ({ maps, ring, width, height, ringWidth, ringHeight, mipLevelCount }) => {
       const filenames = BODIES.map(body => body.texture).concat("2k_earth_nightmap.jpg","2k_earth_clouds.jpg");
@@ -112,7 +138,7 @@ export class Renderer {
     this.maps = textures.maps; this.ring = textures.ring;
     this.sceneBind = device.createBindGroup({ layout: scenePipeline.getBindGroupLayout(0), entries: [
       { binding: 0, resource: { buffer: this.uniformBuffer } },{ binding: 1, resource: { buffer: this.bodyBuffer } },
-      { binding: 2, resource: this.maps.createView({ dimension: "2d-array" }) },{ binding: 3, resource: this.mapSampler },{ binding: 4, resource: this.ring.createView() },{ binding: 5, resource: { buffer: this.orbitBuffer } },
+      { binding: 2, resource: this.maps.createView({ dimension: "2d-array" }) },{ binding: 3, resource: this.mapSampler },{ binding: 4, resource: this.ring.createView() },{ binding: 5, resource: { buffer: this.orbitBuffer } },{ binding: 6, resource: { buffer: this.orbitPoints } },
     ] });
     this.resize();
     await device.queue.onSubmittedWorkDone();
@@ -120,10 +146,13 @@ export class Renderer {
 
   resize() {
     if (!this.device || !this.scenePipeline || this.disposed) return;
-    const ratio = Math.min(window.devicePixelRatio || 1,1.5) * this.scale;
+    this.cssWidth = this.canvas.clientWidth;
+    this.cssHeight = this.canvas.clientHeight;
     const max = this.device.limits.maxTextureDimension2D;
-    const w = Math.min(max,Math.max(2,Math.round(this.canvas.clientWidth * ratio)));
-    const h = Math.min(max,Math.max(2,Math.round(this.canvas.clientHeight * ratio)));
+    const ratio = Math.min(Math.min(window.devicePixelRatio || 1,1.5)*this.scale,
+      max/Math.max(1,this.cssWidth),max/Math.max(1,this.cssHeight));
+    const w = Math.min(max,Math.max(2,Math.round(this.cssWidth * ratio)));
+    const h = Math.min(max,Math.max(2,Math.round(this.cssHeight * ratio)));
     if (w === this.width && h === this.height) return;
     this.width = this.canvas.width = w; this.height = this.canvas.height = h;
     this.sceneTexture?.destroy(); this.bloomA?.destroy(); this.bloomB?.destroy();
@@ -148,7 +177,7 @@ export class Renderer {
   }
 
   render(camera,simulation,selected) {
-    this.orbitDetails.update(simulation,camera);
+    this.orbitDetails.update(simulation,camera,this.width/this.height);
     this.prepareAnnotations?.(this.orbitDetails);
     const u = this.uniforms;
     u[0] = camera.eye[0]; u[1] = camera.eye[1]; u[2] = camera.eye[2]; u[3] = camera.tanFov;
@@ -157,7 +186,7 @@ export class Renderer {
     u[12] = camera.forward[0]; u[13] = camera.forward[1]; u[14] = camera.forward[2]; u[15] = this.exposure;
     u[16] = this.width; u[17] = this.height; u[18] = selected; u[19] = this.orbits ? 1 : 0;
     u[20] = this.bloom ? 0.325 : 0; u[21] = this.atmospheres ? 1 : 0;
-    u[22] = this.width/this.canvas.clientWidth;
+    u[22] = this.width/Math.max(1,this.cssWidth);
     u[23] = this.orbitDetails.saturnLod.opacity>0 ? this.markerOpacity : 0;
     const device = this.device;
     device.queue.writeBuffer(this.uniformBuffer,0,u);
@@ -165,7 +194,17 @@ export class Renderer {
     device.queue.writeBuffer(this.orbitBuffer,0,this.orbitDetails.data);
     const encoder = device.createCommandEncoder(this.encoderDescriptor);
     const scene = encoder.beginRenderPass(this.scenePass);
-    scene.setPipeline(this.scenePipeline); scene.setBindGroup(0,this.sceneBind); scene.draw(3); scene.end();
+    scene.setPipeline(this.scenePipeline); scene.setBindGroup(0,this.sceneBind); scene.draw(3);
+    this.drawCalls = 2; // Scene + final composite, plus optional batched details.
+    if (this.orbits) {
+      scene.setPipeline(this.orbitPipeline); scene.draw(ORBIT_SEGMENTS*6,ORBIT_COUNT);
+      this.drawCalls++;
+    }
+    if (u[23]>0) {
+      scene.setPipeline(this.markerPipeline); scene.draw(6,ORBIT_COUNT);
+      this.drawCalls++;
+    }
+    scene.end();
     if (this.bloom) {
       const compute = encoder.beginComputePass(this.computeDescriptor);
       compute.setPipeline(this.extractPipeline); compute.setBindGroup(0,this.extractBind); compute.dispatchWorkgroups(this.workgroupsX,this.workgroupsY);
@@ -182,9 +221,10 @@ export class Renderer {
   }
 
   destroy() {
+    if (this.disposed) return;
     this.disposed = true;
     this.sceneTexture?.destroy(); this.bloomA?.destroy(); this.bloomB?.destroy();
-    this.maps?.destroy(); this.ring?.destroy(); this.uniformBuffer?.destroy(); this.bodyBuffer?.destroy(); this.orbitBuffer?.destroy();
+    this.maps?.destroy(); this.ring?.destroy(); this.uniformBuffer?.destroy(); this.bodyBuffer?.destroy(); this.orbitBuffer?.destroy(); this.orbitPoints?.destroy();
     this.context?.unconfigure(); this.device?.destroy();
   }
 }

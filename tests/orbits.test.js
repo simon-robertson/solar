@@ -7,7 +7,10 @@ import { Camera } from "../docs/src/camera.js";
 
 const parent = 6*BODY_FLOATS;
 function nearCamera(simulation,distance=10) {
-  return { eye: [simulation.data[parent],simulation.data[parent+1],simulation.data[parent+2]+BODIES[6].radius*distance], focused: -1 };
+  const camera = new Camera();
+  camera.eye.set([simulation.data[parent],simulation.data[parent+1],simulation.data[parent+2]+BODIES[6].radius*distance]);
+  camera.forward.set([0,0,-1]); camera.right.set([1,0,0]); camera.up.set([0,1,0]);
+  return camera;
 }
 const relative = (details,simulation,i) => [0,1,2].map(j => details.positions[i*3+j]-simulation.data[parent+j]);
 
@@ -38,6 +41,26 @@ describe("proximity LOD",() => {
     details.update(simulation,camera);
     expect(details.saturnLod.opacity).toBe(0);
     for (let i = 0; i < SATURN_MOONS.length; i++) expect(details.data[(PLANET_ORBITS+i)*ORBIT_FLOATS+11]).toBe(0);
+  });
+  test("moon LOD never hides planet paths and ignores Saturn behind the camera",() => {
+    const simulation = new Simulation(0), details = new OrbitDetails(), camera = nearCamera(simulation);
+    details.update(simulation,camera);
+    expect(details.saturnLod.opacity).toBe(1);
+    for (let i = 0; i < PLANET_ORBITS; i++) expect(details.data[i*ORBIT_FLOATS+11]).toBe(1);
+    camera.forward.set([0,0,1]); simulation.deltaSeconds = .25;
+    details.update(simulation,camera);
+    expect(details.saturnLod.opacity).toBe(0);
+    for (let i = 0; i < PLANET_ORBITS; i++) expect(details.data[i*ORBIT_FLOATS+11]).toBe(1);
+  });
+  test("each planet close-up retains its own path and does not enable offscreen Saturn detail",() => {
+    const simulation = new Simulation(0), camera = new Camera();
+    for (let index = 1; index < 9; index++) {
+      const details = new OrbitDetails();
+      camera.focus(index,simulation.data); camera.snap = true; camera.update(0,simulation.data);
+      details.update(simulation,camera,16/9);
+      expect(details.data[(index-1)*ORBIT_FLOATS+11]).toBe(1);
+      if (index===3) expect(details.saturnLod.opacity).toBe(0); // J2000 regression: Saturn is close but behind us.
+    }
   });
 });
 
