@@ -111,6 +111,32 @@ describe("camera",() => {
     camera.snap = true; camera.update(0,data);
     expect(camera.target[0]).toBe(data[3*BODY_FLOATS]);
   });
+  test("camera motion settles after targeting and manual input while tracking a moving body",() => {
+    const camera = new Camera(), data = new Float32Array(BODIES.length*BODY_FLOATS);
+    const earth = 3*BODY_FLOATS;
+    data[earth] = 40;
+    camera.update(0,data);
+    expect(camera.moving).toBe(false);
+    camera.focus(3,data);
+    expect(camera.moving).toBe(true);
+    for (let i = 0; i < 500; i++) {
+      data[earth] += .25;
+      camera.update(.016,data);
+    }
+    expect(camera.moving).toBe(false);
+    camera.orbit(30,10);
+    expect(camera.moving).toBe(true);
+    for (let i = 0; i < 200; i++) camera.update(.016,data);
+    expect(camera.moving).toBe(false);
+    camera.zoom(-100);
+    expect(camera.moving).toBe(true);
+    for (let i = 0; i < 200; i++) camera.update(.016,data);
+    expect(camera.moving).toBe(false);
+    camera.overview();
+    expect(camera.moving).toBe(true);
+    camera.snap = true; camera.update(0,data);
+    expect(camera.moving).toBe(false);
+  });
   test("projects its target at the shader's optical centre and retains its arrays",() => {
     const camera = new Camera(), s = new Simulation(0), eye = camera.eye, projected = camera.projection;
     camera.update(0,s.data);

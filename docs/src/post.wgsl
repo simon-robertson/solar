@@ -17,7 +17,7 @@ fn blur(p: vec2i, axis: vec2i) -> vec4f {
   var weights = 0.0;
   for (var i = -8; i <= 8; i++) {
     let weight = exp(-f32(i*i)/24.0);
-    sum += loadAt(p+axis*i*2)*weight;
+    sum += loadAt(p+axis*i)*weight;
     weights += weight;
   }
   return vec4f(sum/weights,1.0);

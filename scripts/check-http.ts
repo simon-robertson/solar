@@ -2,6 +2,10 @@ const origin = process.env.SOLAR_URL ?? "http://127.0.0.1:3000";
 const routes: [string, number, string][] = [
   ["/",200,"text/html"],
   ["/src/app.js",200,"javascript"],
+  ["/src/textures.js",200,"javascript"],
+  ["/src/atmosphere-check.js",200,"javascript"],
+  ["/src/atmosphere-preview.js",200,"javascript"],
+  ["/atmospheres.html",200,"text/html"],
   ["/src/scene.wgsl",200,"text/plain"],
   ["/style.css",200,"text/css"],
   ["/assets/textures/2k_sun.jpg",200,"image/jpeg"],

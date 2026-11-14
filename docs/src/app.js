@@ -2,12 +2,14 @@ import { BODIES, BODY_FLOATS } from "./data.js";
 import { Simulation, toEpochDays, MIN_DAY, MAX_DAY } from "./simulation.js";
 import { Camera } from "./camera.js";
 import { Renderer } from "./renderer.js";
+import { SATURN_MOONS, PLANET_ORBITS, ORBIT_FLOATS, satelliteVisibility } from "./orbit-details.js";
 
 const $ = id => document.getElementById(id);
 const canvas = $("universe");
 const simulation = new Simulation();
 const camera = new Camera();
 const renderer = new Renderer(canvas,fail);
+renderer.prepareAnnotations = prepareSatelliteMarkers;
 const date = new Date();
 const dateFormat = new Intl.DateTimeFormat("en-GB",{ day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
 const numbers = new Intl.NumberFormat("en-GB",{ maximumFractionDigits: 0 });
@@ -18,15 +20,18 @@ let selected = -1, running = false, animation = 0, lastTime = 0, lastUI = 0, las
 let frames = 0, frameMillis = 0, cpuMillis = 0, validationErrors = 0;
 let width = window.innerWidth, height = window.innerHeight, showLabels = true;
 let pointer = -1, lastX = 0, lastY = 0, moved = 0;
-const buttons = [], labels = [];
-const labelBounds = new Float32Array(BODIES.length*4);
+let labelsSuppressed = true, labelsQuietSince = 0, labelsFadeStarted = 0, satelliteNamesActive = false;
+const buttons = [], labels = [], satelliteLabels = [];
+const labelBounds = new Float32Array((BODIES.length+SATURN_MOONS.length)*4);
+const annotationPanels = [".header",".intro",".view-controls",".bottom-deck"].map(selector => document.querySelector(selector));
+const annotationBounds = new Float32Array(annotationPanels.length*4);
 const nav = $("planet-nav");
 const labelsContainer = $("labels");
 const loadScreen = $("loading");
 const loadingText = $("loading-text");
 const pauseIcon = $("pause-icon"), playIcon = $("play-icon"), pauseButton = $("pause");
 const timeState = $("time-state"), dateText = $("date");
-const stats = { fps: $("stat-fps"), frame: $("stat-frame"), cpu: $("stat-cpu"), draws: $("stat-draws"), compute: $("stat-compute"), resolution: $("stat-resolution"), delta: $("stat-delta"), resources: $("stat-resources"), errors: $("stat-errors") };
+const stats = { fps: $("stat-fps"), frame: $("stat-frame"), cpu: $("stat-cpu"), draws: $("stat-draws"), compute: $("stat-compute"), resolution: $("stat-resolution"), textures: $("stat-textures"), delta: $("stat-delta"), resources: $("stat-resources"), errors: $("stat-errors") };
 const info = { kind: $("body-kind"), name: $("body-name"), description: $("body-description"), label1: $("fact-one-label"), value1: $("fact-one"), label2: $("fact-two-label"), value2: $("fact-two"), fact: $("body-fact"), explore: $("explore") };
 const preferencesKey = "solar.preferences.v1";
 const preferences = {
@@ -90,7 +95,7 @@ for (let i = 0; i < BODIES.length; i++) {
   button.setAttribute("aria-pressed","false");
   // All markup comes from the static local body catalogue, never external input.
   const textureURL = new URL(`../assets/textures/${body.texture}`,import.meta.url).href;
-  button.innerHTML = `<span class="planet-thumb" style="background-image:url('${textureURL}')" aria-hidden="true"></span><span class="planet-caption"><small>${i===0?"OUR STAR":i===9?"SATELLITE":`PLANET 0${i}`}</small><strong>${body.name}</strong></span>`;
+  button.innerHTML = `<span class="planet-thumb" style="background-image:url('${textureURL}')" aria-hidden="true"></span><span class="planet-caption"><small>${i===0?"STAR":i===9?"SATELLITE":`0${i}`}</small><strong>${body.name}</strong></span>`;
   button.addEventListener("click",() => selectBody(i));
   nav.append(button); buttons.push(button);
   const label = document.createElement("span");
@@ -99,8 +104,17 @@ for (let i = 0; i < BODIES.length; i++) {
   labelsContainer.append(label); labels.push(label);
 }
 
+for (const moon of SATURN_MOONS) {
+  const label = document.createElement("span");
+  label.className = "satellite-label"; label.textContent = moon.name; label.hidden = true;
+  label.dataset.moon = moon.name;
+  labelsContainer.append(label); satelliteLabels.push(label);
+}
+
 function selectBody(index) {
+  hideMovingLabels();
   selected = index;
+  document.body.dataset.view = "body";
   camera.focus(index,simulation.data);
   if (reducedMotion) camera.snap = true;
   const body = BODIES[index];
@@ -118,16 +132,27 @@ function selectBody(index) {
   const period = index===0 ? body.day : body.period;
   info.value2.innerHTML = period > 1000 ? `${(period/365.25).toFixed(1)} <small>years</small>` : `${period.toFixed(period < 100 ? 1 : 0)} <small>days</small>`;
   info.fact.textContent = body.fact; info.fact.hidden = false;
-  info.explore.textContent = "Back to the system ↗";
+  info.explore.innerHTML = 'System overview <span aria-hidden="true">↗</span>';
   setViewButtons(true);
+  refreshAnnotationBounds();
 }
 
 function overview() {
+  hideMovingLabels();
   camera.overview();
   if (reducedMotion) camera.snap = true;
   setViewButtons(false);
-  if (selected < 0) return;
-  info.explore.textContent = `Visit ${BODIES[selected].name} ↗`;
+  document.body.dataset.view = "system";
+  info.kind.textContent = "SYSTEM OVERVIEW";
+  info.name.innerHTML = "Solar <br>system";
+  info.description.textContent = "Explore the Sun, eight planets and the Moon. Select a body to inspect its surface and orbit.";
+  info.label1.textContent = "PLANETS";
+  info.value1.textContent = "08";
+  info.label2.textContent = "SYSTEM AGE";
+  info.value2.innerHTML = "4.6 <small>billion yr</small>";
+  info.fact.hidden = true;
+  info.explore.innerHTML = `View ${BODIES[selected<0?3:selected].name} <span aria-hidden="true">→</span>`;
+  refreshAnnotationBounds();
 }
 
 function setViewButtons(focused) {
@@ -146,8 +171,13 @@ function updatePause() {
 }
 
 function togglePause() { simulation.paused = !simulation.paused; updatePause(); }
-function reset() { simulation.reset(); updatePause(); lastUI = 0; }
-function setSettings(open) { $("settings").hidden = !open; $("settings-open").setAttribute("aria-expanded",String(open)); }
+function reset() { hideMovingLabels(); simulation.reset(); updatePause(); lastUI = 0; }
+function setSettings(open) {
+  $("settings").hidden = !open;
+  $("settings-open").setAttribute("aria-expanded",String(open));
+  if (open) $("settings-close").focus();
+  else if ($("settings").contains(document.activeElement)) $("settings-open").focus();
+}
 
 $("overview").addEventListener("click",overview);
 $("planet-view").addEventListener("click",() => { if (selected>=0) selectBody(selected); });
@@ -198,7 +228,7 @@ canvas.addEventListener("pointermove",event => {
   if (event.pointerId!==pointer) return;
   const dx = event.clientX-lastX, dy = event.clientY-lastY;
   moved += Math.abs(dx)+Math.abs(dy);
-  if (moved>4) camera.orbit(dx,dy);
+  if (moved>4) { hideMovingLabels(); camera.orbit(dx,dy); }
   lastX = event.clientX; lastY = event.clientY;
 });
 canvas.addEventListener("pointerup",event => {
@@ -208,10 +238,16 @@ canvas.addEventListener("pointerup",event => {
 });
 canvas.addEventListener("pointercancel",() => { pointer = -1; });
 canvas.addEventListener("lostpointercapture",() => { pointer = -1; });
-canvas.addEventListener("wheel",event => { event.preventDefault(); camera.zoom(Math.max(-200,Math.min(200,event.deltaY))); },{ passive: false });
+canvas.addEventListener("wheel",event => {
+  event.preventDefault();
+  hideMovingLabels();
+  camera.zoom(Math.max(-200,Math.min(200,event.deltaY)));
+},{ passive: false });
 canvas.addEventListener("dblclick",overview);
 
 function pick(x,y) {
+  const bounds = canvas.getBoundingClientRect();
+  x -= bounds.left; y -= bounds.top;
   let closest = -1, bestScore = Infinity;
   for (let i = 0; i < BODIES.length; i++) {
     const o = i*BODY_FLOATS;
@@ -225,9 +261,29 @@ function pick(x,y) {
   if (closest>=0) selectBody(closest);
 }
 
+function hideMovingLabels() {
+  labelsQuietSince = 0;
+  renderer.markerOpacity = 0;
+  if (labelsSuppressed) return;
+  labelsSuppressed = true;
+  labelsContainer.classList.add("camera-moving");
+}
+
+function updateLabelVisibility(now) {
+  if (camera.moving || (pointer!==-1 && moved>4)) { hideMovingLabels(); return; }
+  if (!labelsSuppressed) return;
+  if (!labelsQuietSince) labelsQuietSince = now;
+  if (now-labelsQuietSince<160) return;
+  // Position every label before revealing the group, including after retargeting.
+  updateLabels(); lastLabels = now;
+  labelsSuppressed = false; labelsFadeStarted = now;
+  labelsContainer.classList.remove("camera-moving");
+}
+
 function updateLabels() {
   if (!showLabels) return;
   const data = simulation.data;
+  const compactScene = canvas.offsetTop>0;
   for (let i = 0; i < labels.length; i++) {
     const box = i*4;
     labelBounds[box] = Infinity;
@@ -236,16 +292,16 @@ function updateLabels() {
     const p = camera.project(x,y,z,width,height);
     const depth = p[2];
     const radius = BODIES[i].radius / depth / camera.tanFov * height*.5;
-    let visible = depth>0 && p[0]>15 && p[0]<width-90 && p[1]>112 && p[1]<height-210 && radius<height*.36;
+    let visible = depth>0 && p[0]>15 && p[0]<width-90 && p[1]>(compactScene?12:112) && p[1]<height-(compactScene?12:210) && radius<height*.36;
     const lx = Math.round(p[0]+radius+9), ly = Math.round(p[1]-4);
-    const labelWidth = BODIES[i].name.length*6+20;
-    if (lx < (width<850?235:320) && ly<height-210) visible = false;
+    const labelWidth = BODIES[i].name.length*7+24;
+    if (!compactScene && lx < (width<850?235:340) && ly<height-210) visible = false;
     // Reuse a fixed bounds buffer to prevent labels from overlapping each other.
     if (visible) {
       for (let j = 0; j < i; j++) {
         const previous = j*4;
         if (lx<labelBounds[previous+2] && lx+labelWidth>labelBounds[previous] &&
-            ly<labelBounds[previous+3] && ly+12>labelBounds[previous+1]) { visible = false; break; }
+            ly<labelBounds[previous+3] && ly+15>labelBounds[previous+1]) { visible = false; break; }
       }
     }
     // Suppress a label when another sphere actually occludes that body's centre.
@@ -265,9 +321,78 @@ function updateLabels() {
     labels[i].hidden = !visible;
     if (visible) {
       labelBounds[box] = lx; labelBounds[box+1] = ly;
-      labelBounds[box+2] = lx+labelWidth; labelBounds[box+3] = ly+12;
+      labelBounds[box+2] = lx+labelWidth; labelBounds[box+3] = ly+15;
       labels[i].style.transform = `translate(${lx}px,${ly}px)`;
     } else { labelBounds[box+2] = -Infinity; }
+  }
+}
+
+function refreshAnnotationBounds() {
+  const canvasRect = canvas.getBoundingClientRect();
+  for (let i = 0; i < annotationPanels.length; i++) {
+    const rect = annotationPanels[i].getBoundingClientRect(), o = i*4;
+    annotationBounds[o] = rect.left-canvasRect.left-15;
+    annotationBounds[o+1] = rect.top-canvasRect.top-15;
+    annotationBounds[o+2] = rect.right-canvasRect.left+15;
+    annotationBounds[o+3] = rect.bottom-canvasRect.top+15;
+  }
+}
+
+function annotationAreaClear(left,top,right,bottom) {
+  for (let i = 0; i < annotationBounds.length; i += 4) {
+    if (left<annotationBounds[i+2] && right>annotationBounds[i] && top<annotationBounds[i+3] && bottom>annotationBounds[i+1]) return false;
+  }
+  return true;
+}
+
+function prepareSatelliteMarkers(detail) {
+  if (detail.saturnLod.opacity<=0) return;
+  for (let i = 0; i < SATURN_MOONS.length; i++) {
+    const p = camera.project(detail.positions[i*3],detail.positions[i*3+1],detail.positions[i*3+2],width,height);
+    const clear = p[2]>0 && p[0]>15 && p[0]<width-15 && p[1]>15 && p[1]<height-15 && annotationAreaClear(p[0],p[1],p[0],p[1]);
+    detail.data[(PLANET_ORBITS+i)*ORBIT_FLOATS+14] = clear ? 1 : 0;
+  }
+}
+
+function updateSatelliteLabels() {
+  const detail = renderer.orbitDetails, opacity = detail.saturnLod.opacity;
+  if (!showLabels || opacity<=0) {
+    if (satelliteNamesActive) for (const label of satelliteLabels) label.hidden = true;
+    satelliteNamesActive = false;
+    return;
+  }
+  satelliteNamesActive = true;
+  const compactScene = canvas.offsetTop>0;
+  for (let i = 0; i < satelliteLabels.length; i++) {
+    const label = satelliteLabels[i], box = (BODIES.length+i)*4;
+    labelBounds[box] = Infinity;
+    const x = detail.positions[i*3], y = detail.positions[i*3+1], z = detail.positions[i*3+2];
+    const p = camera.project(x,y,z,width,height);
+    let visible = detail.data[(PLANET_ORBITS+i)*ORBIT_FLOATS+14]>.5;
+    if (visible) visible = satelliteVisibility(camera,simulation.data,x,y,z)>0;
+    const labelWidth = SATURN_MOONS[i].name.length*6.8, labelHeight = 15;
+    let lx = p[0]+19, ly = p[1]-7;
+    let placed = false;
+    for (let attempt = 0; visible && attempt<4; attempt++) {
+      lx = attempt%2===0 ? p[0]+19 : p[0]-19-labelWidth;
+      ly = attempt<2 ? p[1]-7 : p[1]+15;
+      if (lx<12 || lx+labelWidth>width-12 || ly<(compactScene?4:98) || ly+labelHeight>height-(compactScene?4:195)) continue;
+      if (!annotationAreaClear(lx,ly,lx+labelWidth,ly+labelHeight)) continue;
+      let clear = true;
+      for (let j = 0; j < BODIES.length+i; j++) {
+        const previous = j*4;
+        if (lx<labelBounds[previous+2]+8 && lx+labelWidth>labelBounds[previous]-8 && ly<labelBounds[previous+3]+6 && ly+labelHeight>labelBounds[previous+1]-6) { clear = false; break; }
+      }
+      if (clear) { placed = true; break; }
+    }
+    visible &&= placed;
+    label.hidden = !visible;
+    if (visible) {
+      labelBounds[box] = lx; labelBounds[box+1] = ly;
+      labelBounds[box+2] = lx+labelWidth; labelBounds[box+3] = ly+labelHeight;
+      label.style.transform = `translate(${Math.round(lx)}px,${Math.round(ly)}px)`;
+      label.style.opacity = opacity;
+    }
   }
 }
 
@@ -280,8 +405,12 @@ function frame(now) {
   const dt = Math.min(.05,Math.max(0,rawDelta));
   simulation.tick(dt);
   camera.update(dt,simulation.data);
+  const fade = Math.min(1,Math.max(0,(now-labelsFadeStarted)/350));
+  renderer.markerOpacity = labelsSuppressed ? 0 : reducedMotion ? 1 : 1-Math.pow(1-fade,3);
   renderer.render(camera,simulation,selected);
-  if (now-lastLabels>65) { updateLabels(); lastLabels = now; }
+  updateLabelVisibility(now);
+  if (!labelsSuppressed && now-lastLabels>65) { updateLabels(); lastLabels = now; }
+  if (!labelsSuppressed) updateSatelliteLabels();
   frames++;
   if (rawDelta>0) frameMillis += rawDelta*1000;
   cpuMillis += performance.now()-start;
@@ -319,6 +448,7 @@ function fail(message) {
 const resizeObserver = new ResizeObserver(() => {
   width = canvas.clientWidth; height = canvas.clientHeight;
   renderer.resize();
+  refreshAnnotationBounds();
 });
 document.addEventListener("visibilitychange",() => {
   cancelAnimationFrame(animation); animation = 0; lastTime = 0;
@@ -334,6 +464,8 @@ try {
   restorePreferences();
   updatePause();
   await renderer.init(simulation.data,message => { loadingText.textContent = message; });
+  stats.textures.textContent = `${renderer.maps.width} × ${renderer.maps.height} · ${renderer.maps.mipLevelCount} levels`;
+  refreshAnnotationBounds();
   resizeObserver.observe(canvas);
   camera.update(0,simulation.data);
   running = true;

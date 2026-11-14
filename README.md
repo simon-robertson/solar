@@ -41,12 +41,15 @@ See [GitHub's publishing-source documentation](https://docs.github.com/en/pages/
 ## Explore
 
 - Select a world in the bottom rail to fly closer. System view returns to overview.
+- Move near Saturn to reveal seven major moons as non-interactive circle markers.
+  This proximity detail fades out when you zoom away; see [orbital detail and LOD](docs/ORBITAL-DETAIL.md).
 - Drag the scene to orbit; scroll to zoom. Click a planet to focus it.
+- Body labels hide during camera movement and fade back in once the camera settles.
 - Space pauses/resumes; R resets the simulation date to today; Escape returns to
   system view. Shortcuts leave form controls and dialogs alone.
 - Change speed or reverse time in the bottom bar.
 - Render settings control orbital paths, labels, atmospheres, bloom, exposure
-  and resolution. Expand **Under the hood** for live rendering diagnostics.
+  and resolution. Expand **Rendering diagnostics** for live rendering diagnostics.
 - Reduced-motion preferences start the simulation paused and remove camera flights.
 
 Time speed/direction and all render settings persist across refreshes in
@@ -70,7 +73,7 @@ Each steady frame has **two draw calls**, both fullscreen triangles:
    mipmapped texture array, shades the nearest hit and evaluates finite-Sun
    visibility against the other bodies. Saturn's textured ring plane participates in
    occlusion and shadow casting. Earth has clouds, night lights and ocean specular
-   highlights. Stars, orbital paths and approximate atmosphere rims are evaluated
+   highlights. Stars, orbital paths and bounded single-scattering atmospheres are evaluated
    in the same shader. Output is linear HDR (`rgba16float`).
 2. The composite shader adds bloom, applies an ACES-style tone curve, a vignette
    and display gamma.
@@ -79,12 +82,19 @@ Bloom uses **three compute dispatches in one compute pass**: half-resolution
 threshold/downsample and horizontal/vertical blur. Turning bloom off skips these
 dispatches. No shadow maps, planet meshes, per-planet draws or depth buffer.
 
-Textures are decoded and uploaded once, using at most two concurrent image
-decodes. CPU image bitmaps are then closed. The 12-layer, 1024 × 512 sRGB texture
-array occupies approximately 32 MiB including mipmaps. Its mip levels are generated
-with 120 extra **startup-only** draws, excluded from the steady-frame count.
-Explicit texture LOD avoids invalid implicit derivatives inside divergent ray-hit
-branches and reduces distant texture aliasing.
+Texture initialization checks the device’s dimension and array-layer limits, then
+tries the original 2048 × 1024 maps and 2048 × 125 Saturn ring. If texture allocation,
+upload or mipmap initialization reports an out-of-memory error, it releases that
+texture set and retries at 1024 × 512 (1024 × 64 for the ring). Asset failures and
+unrelated validation errors are reported rather than retried. Image decoding uses
+at most two concurrent bitmaps, each closed after upload.
+
+The 12-layer sRGB array occupies approximately 128 MiB at 2K or 32 MiB at 1K,
+including mipmaps. The full chains have 12 or 11 levels, generated with 132 or 120
+extra **startup-only** draws, respectively, excluded from the steady-frame count.
+Explicit texture LOD reads the actual texture dimensions and level count, avoiding
+invalid implicit derivatives inside divergent ray-hit branches and reducing distant
+texture aliasing. **Rendering diagnostics → Texture maps** reports the chosen size.
 
 `requestAnimationFrame` produces a seconds-based delta. A 50 ms cap avoids large
 simulation jumps after stalls. Rendering stops while the document is hidden, and
@@ -143,8 +153,8 @@ updates. The app pauses at the model's date limits.
 Distances and body sizes are compressed independently for visibility. Earth's
 orbit uses the Earth–Moon barycentre as an approximation; the Moon has a simplified
 Earth-centred Kepler ellipse. Rotation/axial tilt and lighting are illustrative;
-this is not a precision ephemeris or N-body integration. Atmospheres are analytic
-halos rather than physical scattering, and eclipses follow the finite display
+this is not a precision ephemeris or N-body integration. Atmospheres use bounded single scattering with display-calibrated density profiles
+(see [atmosphere model and validation](docs/ATMOSPHERES.md)), and eclipses follow the finite display
 Sun as described above. The solar system is rendered in ordinary single-precision GPU display
 coordinates. Labels, informational facts and texture colours are for exploration.
 
@@ -158,19 +168,29 @@ Sources:
 
 ## Verification
 
+Choose checks for the changed subsystem. For moon/orbit/LOD changes, run
+`bun test tests/orbits.test.js` and open **http://127.0.0.1:3000/orbits-verify.html**.
+These focused checks leave unrelated rendering groups out. The broader checks
+below are available when the affected code warrants them.
+
 ```sh
 bun test
 # With the server running:
 bun scripts/check-http.ts
 ```
 
-The ten Bun tests check Kepler residuals, independently referenced J2000 Earth
+The Bun tests check Kepler residuals, independently referenced J2000 Earth
 coordinates, pause/reverse/delta handling, equivalent split time steps, model
 limits, lunar distances, camera projection/buffer reuse, and continuous camera
 flights to stationary or moving planets. Flights decay a preallocated look-at
 offset relative to the selected body, so zoom settling never triggers a snap.
+Texture-allocation tests cover native 2K selection, dimension limits, immediate
+and deferred out-of-memory fallback, resource cleanup, and unrelated failures.
 
-Open **http://127.0.0.1:3000/verify.html** to run 18 checks on the actual GPU:
+Open **http://127.0.0.1:3000/verify.html** to run 31 checks on the actual GPU:
+texture profiles, final mip contents, resolution-dependent LOD, atmosphere geometry,
+optical depth and attenuation against independent numerical references,
+night-side/eclipsed atmosphere suppression, foreground/ring occlusion,
 production-shader compilation, pixel-readback sunlight/eclipses/background tests,
 frame-resource reuse, resolution rebuilds, bloom dispatch counts and WebGPU
 validation. The controlled shadow test moves the Moon between the Sun and Earth's
@@ -185,6 +205,10 @@ when finished.
 HTTP checks cover assets and MIME types, missing files, private-file/path-traversal
 rejection, HEAD and unsupported methods. Browser QA also covers Earth and Saturn
 closeups, playback controls and render settings.
+
+Controlled atmosphere views and a batch-completion benchmark are available at
+**http://127.0.0.1:3000/atmospheres.html**. See [the atmosphere notes](docs/ATMOSPHERES.md)
+for the model, reference images, measured cost and numerical error bounds.
 
 ## Files
 

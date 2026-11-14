@@ -33,7 +33,7 @@ export class Camera {
     }
     this.goalTheta = index === 0 ? .4 : Math.atan2(-data[o],-data[o+2])+.7;
     this.goalPhi = index === 6 ? .35 : .25;
-    this.goalDistance = BODIES[index].radius * (index === 6 ? 9 : 5.6);
+    this.goalDistance = BODIES[index].radius * (index === 6 ? 12 : 5.6);
   }
 
   orbit(dx,dy) {
@@ -44,6 +44,16 @@ export class Camera {
   zoom(delta) {
     const minimum = this.focused < 0 ? 8 : BODIES[this.focused].radius * 2.6;
     this.goalDistance = Math.max(minimum,Math.min(200,this.goalDistance * Math.exp(delta * .001)));
+  }
+
+  get moving() {
+    // Measure the remaining camera flight, not the motion of a tracked planet.
+    // Relative tolerances keep close-ups and system views equally quiet.
+    const tolerance = this.distance*.0001;
+    return Math.abs(this.goalTheta-this.theta)>.0001 ||
+      Math.abs(this.goalPhi-this.phi)>.0001 ||
+      Math.abs(this.goalDistance-this.distance)>tolerance ||
+      Math.hypot(this.focusOffset[0],this.focusOffset[1],this.focusOffset[2])>tolerance;
   }
 
   update(dt, data) {

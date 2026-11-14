@@ -4,7 +4,7 @@ struct Camera {
   up: vec4f,        // basis, elapsed real seconds
   forward: vec4f,   // basis, exposure
   viewport: vec4f,  // width, height, selected body, orbit visibility
-  effects: vec4f,   // bloom strength, atmosphere visibility, unused, unused
+  effects: vec4f,   // bloom strength, atmosphere visibility, render/CSS ratio, annotation opacity
 }
 struct Body {
   sphere: vec4f,
@@ -14,6 +14,13 @@ struct Body {
   orbitB: vec4f,     // plane basis Y, eccentricity
   origin: vec4f,
 }
+struct Orbit {
+  axisA: vec4f,  // orbital basis A, display semimajor axis
+  axisB: vec4f,  // orbital basis B, eccentricity
+  center: vec4f, // parent position, proximity LOD opacity
+  phase: vec4f,  // eccentric anomaly, time direction, marker flag, selectable body ID (-1 for markers)
+}
+@group(0) @binding(5) var<storage, read> orbits: array<Orbit>;
 @group(0) @binding(0) var<uniform> camera: Camera;
 @group(0) @binding(1) var<storage, read> bodies: array<Body>;
 @group(0) @binding(2) var maps: texture_2d_array<f32>;
@@ -96,8 +103,8 @@ fn surfaceUV(normal: vec3f, body: Body) -> vec2f {
 // footprint is projected onto the sphere, including grazing-angle stretching.
 fn textureLOD(t: f32, radius: f32, facing: f32) -> f32 {
   let pixelWorld = 2.0 * t * camera.eye.w / camera.viewport.y;
-  let footprint = pixelWorld * 1024.0 / (TAU * radius * max(facing, 0.12));
-  return clamp(log2(max(footprint, 1.0)), 0.0, 10.0);
+  let footprint = pixelWorld * f32(textureDimensions(maps,0).x) / (TAU * radius * max(facing, 0.12));
+  return clamp(log2(max(footprint, 1.0)), 0.0, f32(textureNumLevels(maps)-1u));
 }
 
 fn ringUV(point: vec3f) -> f32 {
@@ -229,26 +236,223 @@ fn stars(rd: vec3f) -> vec3f {
   return result;
 }
 
-fn orbitLines(ro: vec3f, rd: vec3f, nearest: f32) -> vec3f {
+// Screen-space curve coverage: differentiate the implicit ellipse through the
+// ray/plane intersection so foreshortening does not change the apparent width.
+fn orbitTrail(phase: f32, angle: f32, direction: f32) -> f32 {
+  let lag = fract(direction*(phase-angle)/TAU+1.0);
+  return pow(1.0-smoothstep(0.0,0.8,lag),1.5);
+}
+fn orbitLines(ro: vec3f, rd: vec3f, nearest: f32, ringDepth: f32) -> vec3f {
   var color = vec3f(0.0);
-  if (camera.viewport.w < 0.5) { return color; }
-  for (var i = 1u; i < arrayLength(&bodies); i++) {
-    let body = bodies[i];
-    let normal = cross(body.orbitA.xyz, body.orbitB.xyz);
-    let denominator = dot(rd, normal);
-    if (abs(denominator) < 0.0001) { continue; }
-    let t = dot(body.origin.xyz - ro, normal) / denominator;
-    if (t <= 0.0 || t > nearest) { continue; }
-    let p = ro + rd * t - body.origin.xyz;
-    let a = body.orbitA.w;
-    let e = body.orbitB.w;
-    let q = vec2f(dot(p, body.orbitA.xyz) / a + e,
-                  dot(p, body.orbitB.xyz) / (a * sqrt(1.0-e*e)));
-    let error = abs(length(q) - 1.0) * a;
-    let width = max(0.0003, t * camera.eye.w / camera.viewport.y);
-    let alpha = 1.0 - smoothstep(width * 0.2, width * 1.6, error);
-    let selected = abs(camera.viewport.z - f32(i)) < 0.1;
-    color += select(vec3f(0.045,0.057,0.069),vec3f(0.34,0.23,0.11),selected) * alpha;
+  if (camera.viewport.w<0.5) { return color; }
+  let ratio = max(camera.effects.z,0.001);
+  for (var i = 0u; i<arrayLength(&orbits); i++) {
+    let orbit = orbits[i];
+    if (orbit.center.w<=0.0) { continue; }
+    let normal = cross(orbit.axisA.xyz,orbit.axisB.xyz);
+    let denominator = dot(rd,normal);
+    if (abs(denominator)<0.0001) { continue; }
+    let t = dot(orbit.center.xyz-ro,normal)/denominator;
+    if (t<=0.0 || t>nearest) { continue; }
+    let point = ro+rd*t-orbit.center.xyz;
+    let a = orbit.axisA.w;
+    let e = orbit.axisB.w;
+    let b = a*sqrt(1.0-e*e);
+    let q = vec2f(dot(point,orbit.axisA.xyz)/a+e,dot(point,orbit.axisB.xyz)/b);
+    let gradient = q.x/a*orbit.axisA.xyz+q.y/b*orbit.axisB.xyz;
+    let pixelScale = t*2.0*camera.eye.w/camera.viewport.y*max(dot(rd,camera.forward.xyz),0.0001);
+    let dx = (camera.right.xyz-rd*dot(camera.right.xyz,normal)/denominator)*pixelScale;
+    let dy = (camera.up.xyz-rd*dot(camera.up.xyz,normal)/denominator)*pixelScale;
+    let distance = abs(0.5*(dot(q,q)-1.0))/max(length(vec2f(dot(gradient,dx),dot(gradient,dy))),0.000001);
+    let trail = orbitTrail(orbit.phase.x,atan2(q.y,q.x),orbit.phase.y);
+    let selected = orbit.phase.w>=0.0 && abs(camera.viewport.z-orbit.phase.w)<0.1;
+    let halfWidth = 0.38*ratio;
+    if (distance>halfWidth+0.7) { continue; }
+    var alpha = (1.0-smoothstep(max(0.0,halfWidth-0.7),halfWidth+0.7,distance))*orbit.center.w;
+    if (ringDepth<t) {
+      let opacity = textureSampleLevel(ringMap,mapSampler,vec2f(ringUV(ro+rd*ringDepth),0.5),0.0).a;
+      alpha *= 1.0-opacity;
+    }
+    let ink = mix(vec3f(0.026,0.025,0.020),vec3f(0.29,0.265,0.19),trail);
+    color += ink*alpha*select(0.85,1.1,selected);
+  }
+  return color;
+}
+
+// Hollow annotations, never spheres: screen-pixel radius is independent of the
+// body's actual size and camera zoom. The existing depth/ring coverage hides
+// portions behind foreground objects without adding a render pass or pick target.
+fn satelliteMarkers(ro: vec3f, rd: vec3f, frag: vec2f, nearest: f32, ringDepth: f32) -> vec3f {
+  var color = vec3f(0.0);
+  if (camera.effects.w<=0.0) { return color; }
+  let ratio = max(camera.effects.z,0.001);
+  for (var i = 0u; i<arrayLength(&orbits); i++) {
+    let orbit = orbits[i];
+    if (orbit.phase.z<0.5 || orbit.center.w<=0.0) { continue; }
+    let a = orbit.axisA.w;
+    let e = orbit.axisB.w;
+    let anomaly = orbit.phase.x;
+    let position = orbit.center.xyz+orbit.axisA.xyz*a*(cos(anomaly)-e)+orbit.axisB.xyz*a*sqrt(1.0-e*e)*sin(anomaly);
+    let delta = position-ro;
+    let depth = dot(delta,camera.forward.xyz);
+    let rayDepth = dot(delta,rd);
+    if (depth<=0.0 || rayDepth>nearest) { continue; }
+    let screen = vec2f(
+      (dot(delta,camera.right.xyz)/(depth*camera.eye.w*camera.right.w)+1.18)*camera.viewport.x*0.5,
+      (1.0-dot(delta,camera.up.xyz)/(depth*camera.eye.w))*camera.viewport.y*0.5);
+    let edge = abs(length(frag-screen)-11.0*ratio);
+    if (edge>1.5*ratio) { continue; }
+    var alpha = (1.0-smoothstep(0.7*ratio,1.5*ratio,edge))*orbit.center.w*camera.effects.w;
+    if (ringDepth<rayDepth) {
+      let opacity = textureSampleLevel(ringMap,mapSampler,vec2f(ringUV(ro+rd*ringDepth),0.5),0.0).a;
+      alpha *= 1.0-opacity;
+    }
+    color += vec3f(0.5,0.48,0.41)*alpha;
+  }
+  return color;
+}
+
+// Atmosphere calculations use planet radii as the length unit. RGB stores
+// vertical molecular optical depth; w is the illustrative density scale height.
+// See ATMOSPHERES.md for the display-scale calibration and limitations.
+struct AtmosphereResult { scattering: vec3f, transmission: vec3f }
+
+fn sphereInterval(ro: vec3f, rd: vec3f, radius: f32) -> vec2f {
+  let middle = -dot(ro,rd);
+  let closest = ro+rd*middle;
+  let discriminant = radius*radius-dot(closest,closest);
+  if (discriminant<=0.0) { return vec2f(0.0); }
+  let halfChord = sqrt(discriminant);
+  return vec2f(middle-halfChord,middle+halfChord);
+}
+
+fn aerosolProfile(index: u32) -> vec4f {
+  switch index {
+    case 2u: { return vec4f(0.075,0.070,0.055,0.72); } // Venus haze above clouds
+    case 3u: { return vec4f(0.008,0.008,0.008,0.76); } // Earth aerosols
+    case 4u: { return vec4f(0.035,0.025,0.015,0.60); } // Martian dust
+    case 5u: { return vec4f(0.010,0.009,0.007,0.65); }
+    case 6u: { return vec4f(0.018,0.015,0.010,0.65); }
+    case 7u: { return vec4f(0.012,0.018,0.019,0.60); }
+    case 8u: { return vec4f(0.008,0.013,0.017,0.60); }
+    default: { return vec4f(0.0); }
+  }
+}
+
+fn atmosphereDensity(point: vec3f, scaleHeight: f32) -> vec2f {
+  let altitude = max(length(point)-1.0,0.0);
+  return exp(-altitude/vec2f(scaleHeight,scaleHeight*0.5));
+}
+
+// Four-point Gauss-Legendre quadrature on each side of closest approach.
+// Splitting at the density peak keeps grazing/twilight paths accurate.
+fn atmosphereDepthInterval(point: vec3f, direction: vec3f, scaleHeight: f32, start: f32, end: f32) -> vec2f {
+  let distance = end-start;
+  let nodes = array<f32,4>(0.0694318442,0.3300094782,0.6699905218,0.9305681558);
+  let weights = array<f32,4>(0.1739274226,0.3260725774,0.3260725774,0.1739274226);
+  var depth = vec2f(0.0);
+  for (var i = 0u; i<4u; i++) {
+    depth += atmosphereDensity(point+direction*(start+distance*nodes[i]),scaleHeight)*weights[i];
+  }
+  return depth*distance;
+}
+
+fn atmosphereOpticalDepth(point: vec3f, direction: vec3f, scaleHeight: f32) -> vec2f {
+  let interval = sphereInterval(point,direction,1.0+6.0*scaleHeight);
+  let end = max(interval.y,0.0);
+  let closest = clamp(-dot(point,direction),0.0,end);
+  var depth = atmosphereDepthInterval(point,direction,scaleHeight,closest,end);
+  if (closest>0.0) { depth += atmosphereDepthInterval(point,direction,scaleHeight,0.0,closest); }
+  return depth;
+}
+
+fn atmosphereSunTransmission(point: vec3f, light: vec3f, scaleHeight: f32,
+    molecular: vec3f, aerosol: vec3f) -> vec3f {
+  // The planet blocks direct sunlight on the night side. External eclipses and
+  // ring shadows are evaluated separately with the existing finite-Sun model.
+  if (dot(point,light)<0.0 && sphereHit(point,light,vec3f(0.0),1.0)<FAR) { return vec3f(0.0); }
+  let depth = atmosphereOpticalDepth(point,light,scaleHeight);
+  return exp(-molecular*depth.x-aerosol*1.1*depth.y);
+}
+
+fn surfaceAtmosphereTransmission(index: u32, point: vec3f, light: vec3f) -> vec3f {
+  let body = bodies[index];
+  let height = body.atmosphere.w;
+  if (camera.effects.y<0.5 || height<=0.0) { return vec3f(1.0); }
+  // Distant ray/sphere hits can land fractionally inside the surface in f32.
+  // Project onto the sphere before sampling the overlying atmospheric column.
+  let local = normalize(point-body.sphere.xyz)*(1.0+0.000002);
+  return atmosphereSunTransmission(local,light,height,body.atmosphere.rgb/height,
+    aerosolProfile(index).rgb/(height*0.5));
+}
+
+fn integrateAtmosphere(index: u32, ro: vec3f, rd: vec3f, nearDepth: f32, farDepth: f32) -> AtmosphereResult {
+  var result = AtmosphereResult(vec3f(0.0),vec3f(1.0));
+  let body = bodies[index];
+  let height = body.atmosphere.w;
+  if (height<=0.0 || farDepth<=nearDepth) { return result; }
+  let radius = body.sphere.w;
+  let local = (ro-body.sphere.xyz)/radius;
+  let interval = sphereInterval(local,rd,1.0+6.0*height);
+  let start = max(max(interval.x,0.0),nearDepth/radius);
+  let end = min(interval.y,farDepth/radius);
+  if (end<=start) { return result; }
+  let molecular = body.atmosphere.rgb/height;
+  let aerosol = aerosolProfile(index);
+  let aerosolScattering = aerosol.rgb/(height*0.5);
+  let midpoint = ro+rd*((start+end)*0.5*radius);
+  let visibility = sunVisibility(midpoint,vec3f(0.0),index,true);
+  let step = (end-start)/8.0;
+  for (var sample = 0u; sample<8u; sample++) {
+    let t = start+(f32(sample)+0.5)*step;
+    let point = local+rd*t;
+    let density = atmosphereDensity(point,height);
+    let extinction = molecular*density.x+aerosolScattering*1.1*density.y;
+    let segmentTransmission = exp(-extinction*step);
+    let worldPoint = body.sphere.xyz+point*radius;
+    let light = normalize(bodies[0].sphere.xyz-worldPoint);
+    let lightTransmission = atmosphereSunTransmission(point,light,height,molecular,aerosolScattering);
+    let cosine = clamp(dot(rd,light),-1.0,1.0);
+    let rayleighPhase = 3.0*(1.0+cosine*cosine)/(16.0*PI);
+    let g = aerosol.w;
+    let miePhase = (1.0-g*g)/(4.0*PI*pow(max(1.0+g*g-2.0*g*cosine,0.001),1.5));
+    let source = molecular*density.x*rayleighPhase+aerosolScattering*density.y*miePhase;
+    // Exact segment integration for locally constant density/source. This
+    // bounds the energy at grazing angles rather than adding an unbounded rim.
+    result.scattering += result.transmission*lightTransmission*source*
+      (vec3f(1.0)-segmentTransmission)/max(extinction,vec3f(0.000001))*4.8*visibility;
+    result.transmission *= segmentTransmission;
+  }
+  return result;
+}
+
+fn compositeAtmospheres(background: vec3f, ro: vec3f, rd: vec3f, nearDepth: f32, farDepth: f32) -> vec3f {
+  var color = background;
+  if (camera.effects.y<0.5) { return color; }
+  for (var index = 1u; index<arrayLength(&bodies); index++) {
+    let atmosphere = integrateAtmosphere(index,ro,rd,nearDepth,farDepth);
+    color = color*atmosphere.transmission+atmosphere.scattering;
+  }
+  return color;
+}
+
+// Composite the atmosphere on either side of the ring plane independently.
+// Ring alpha attenuates only the atmosphere behind it, including opaque bands.
+fn compositeRingAtmospheres(background: vec3f, ro: vec3f, rd: vec3f, nearest: f32) -> vec3f {
+  var color = background;
+  let ringT = ringIntersection(ro,rd);
+  if (ringT < nearest) {
+    color = compositeAtmospheres(color,ro,rd,ringT,nearest);
+    let point = ro + rd * ringT;
+    let ring = textureSampleLevel(ringMap,mapSampler,vec2f(ringUV(point),0.5),0.0);
+    let light = normalize(bodies[0].sphere.xyz-point);
+    let normal = RING_NORMAL*select(-1.0,1.0,dot(RING_NORMAL,light)>=0.0);
+    let shadow = 0.08+0.92*sunVisibility(point,normal,0u,false);
+    let ringLight = 0.3 + 0.7 * abs(dot(RING_NORMAL,light));
+    color = mix(color,ring.rgb * ringLight * shadow * 1.7,ring.a);
+    color = compositeAtmospheres(color,ro,rd,0.0,ringT);
+  } else {
+    color = compositeAtmospheres(color,ro,rd,0.0,nearest);
   }
   return color;
 }
@@ -281,58 +485,30 @@ fn orbitLines(ro: vec3f, rd: vec3f, nearest: f32) -> vec3f {
       let ndl = max(dot(normal,light),0.0);
       var shadow = 1.0;
       if (ndl > 0.0) { shadow = sunVisibility(point,normal,u32(hit),true); }
-      color = albedo * (0.018 + ndl * 1.55 * shadow);
+      let sunlight = surfaceAtmosphereTransmission(u32(hit),point,light);
+      color = albedo * (vec3f(0.018) + sunlight * ndl * 1.55 * shadow);
       if (hit == 3) {
         let night = textureSampleLevel(maps,mapSampler,uv,10,lod).rgb;
         color += night * (1.0-smoothstep(-0.15,0.16,dot(normal,light))) * 1.4;
         let clouds = textureSampleLevel(maps,mapSampler,uv,11,lod).r;
-        color = mix(color, vec3f(0.92) * (0.02 + ndl * 1.5 * shadow), clouds * 0.66);
+        color = mix(color, vec3f(0.92) * (vec3f(0.02) + sunlight * ndl * 1.5 * shadow), clouds * 0.66);
         let ocean = pow(clamp(albedo.b-albedo.r,0.0,1.0),0.5);
         let halfVector = normalize(light-rd);
-        color += vec3f(0.7,0.8,1.0) * pow(max(dot(normal,halfVector),0.0),100.0) * ocean * shadow;
-      }
-      if (camera.effects.y > 0.5 && body.atmosphere.w > 0.0) {
-        let rim = pow(1.0-max(dot(normal,-rd),0.0),3.0);
-        color += body.atmosphere.rgb * rim * smoothstep(-0.2,0.5,dot(normal,light)) * 0.5;
+        color += vec3f(0.7,0.8,1.0) * pow(max(dot(normal,halfVector),0.0),100.0) * ocean * shadow * sunlight;
       }
     }
   }
-  // The ring plane is evaluated against sphere depth, so front/back occlusion
-  // and Saturn's shadow are correct without a depth buffer or extra draw.
   let ringT = ringIntersection(ro,rd);
-  if (ringT < nearest) {
-    let point = ro + rd * ringT;
-    let ring = textureSampleLevel(ringMap,mapSampler,vec2f(ringUV(point),0.5),0.0);
-    let light = normalize(bodies[0].sphere.xyz-point);
-    let normal = RING_NORMAL*select(-1.0,1.0,dot(RING_NORMAL,light)>=0.0);
-    let shadow = 0.08+0.92*sunVisibility(point,normal,0u,false);
-    let ringLight = 0.3 + 0.7 * abs(dot(RING_NORMAL,light));
-    color = mix(color,ring.rgb * ringLight * shadow * 1.7,ring.a);
-  }
-  color += orbitLines(ro,rd,min(nearest,ringT));
-  // Thin analytic atmosphere halos; no volumetric integration in this version.
-  if (camera.effects.y > 0.5) {
-    for (var i = 1u; i < arrayLength(&bodies); i++) {
-      let body = bodies[i];
-      if (body.atmosphere.w <= 0.0) { continue; }
-      let toBody = body.sphere.xyz - ro;
-      let t = dot(toBody,rd);
-      if (t <= 0.0 || t >= nearest) { continue; }
-      let distance = length(toBody-rd*t);
-      let altitude = (distance-body.sphere.w) / (body.sphere.w * body.atmosphere.w);
-      if (altitude > 0.0 && altitude < 6.0) {
-        let n = normalize(ro+rd*t-body.sphere.xyz);
-        let lit = smoothstep(-0.3,0.6,dot(n,normalize(-body.sphere.xyz)));
-        color += body.atmosphere.rgb * exp(-altitude) * lit * 0.35;
-      }
-    }
-  }
+  color = compositeRingAtmospheres(color,ro,rd,nearest);
+  color += orbitLines(ro,rd,nearest,ringT);
+  color += satelliteMarkers(ro,rd,frag.xy,nearest,ringT);
   // A warm solar aureole, hidden by any foreground planet (including eclipses).
   let sunVector = bodies[0].sphere.xyz-ro;
   let sunT = dot(sunVector,rd);
   if (sunT > 0.0 && sunT < nearest + bodies[0].sphere.w) {
     let distance = length(sunVector-rd*sunT) / bodies[0].sphere.w;
-    let corona = exp(-max(distance-1.0,0.0)*5.0)*0.22 + exp(-distance*0.65)*0.035;
+    let haloDistance = distance + max(distance-1.0,0.0);
+    let corona = (exp(-max(haloDistance-1.0,0.0)*5.0)*0.22 + exp(-haloDistance*0.65)*0.035)*0.5;
     color += vec3f(1.0,0.38,0.065) * corona;
   }
   return vec4f(color,1.0);

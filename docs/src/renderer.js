@@ -1,6 +1,7 @@
 import { BODIES } from "./data.js";
+import { OrbitDetails } from "./orbit-details.js";
+import { allocatePlanetTextures, MAP_LAYERS } from "./textures.js";
 
-const MAP_WIDTH = 1024, MAP_HEIGHT = 512, MAP_LAYERS = 12;
 const shaderURL = name => new URL(`./${name}.wgsl`, import.meta.url);
 
 async function shader(device, name) {
@@ -27,6 +28,9 @@ export class Renderer {
     this.canvas = canvas;
     this.onError = onError;
     this.uniforms = new Float32Array(24);
+    this.orbitDetails = new OrbitDetails();
+    this.markerOpacity = 1;
+    this.prepareAnnotations = null;
     this.width = 0; this.height = 0;
     this.scale = 1;
     this.bloom = true; this.atmospheres = true; this.orbits = true;
@@ -60,10 +64,11 @@ export class Renderer {
     this.context.configure({ device, format: this.format, alphaMode: "opaque" });
     this.uniformBuffer = device.createBuffer({ label: "Reusable camera", size: 96, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.bodyBuffer = device.createBuffer({ label: "Reusable body state", size: bodyData.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+    this.orbitBuffer = device.createBuffer({ label: "Reusable orbital detail state", size: this.orbitDetails.data.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.mapSampler = device.createSampler({ label: "Planet sampler", magFilter: "linear", minFilter: "linear", mipmapFilter: "linear", addressModeU: "repeat", addressModeV: "clamp-to-edge" });
     this.linearSampler = device.createSampler({ magFilter: "linear", minFilter: "linear" });
 
-    progress("Compiling the sky");
+    progress("Compiling shaders");
     const [scene, post, composite, mipmap] = await Promise.all([
       shader(device,"scene"),shader(device,"post"),shader(device,"composite"),shader(device,"mipmap"),
     ]);
@@ -75,37 +80,39 @@ export class Renderer {
     ]);
     this.scenePipeline = scenePipeline; this.finalPipeline = finalPipeline;
     this.extractPipeline = extract; this.blurXPipeline = blurX; this.blurYPipeline = blurY;
-    this.maps = device.createTexture({ label: "Planet texture array", size: [MAP_WIDTH,MAP_HEIGHT,MAP_LAYERS], format: "rgba8unorm-srgb", mipLevelCount: 11, usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT });
-    const filenames = BODIES.map(body => body.texture).concat("2k_earth_nightmap.jpg","2k_earth_clouds.jpg");
-    // Decode two images at a time and release each bitmap immediately after upload.
-    for (let start = 0; start < MAP_LAYERS; start += 2) {
-      await Promise.all(filenames.slice(start,start+2).map(async (name,offset) => {
-        progress(`Loading ${start+offset+1} / ${MAP_LAYERS+1} textures`);
-        const image = await bitmap(name,MAP_WIDTH,MAP_HEIGHT);
-        device.queue.copyExternalImageToTexture({ source: image }, { texture: this.maps, origin: [0,0,start+offset] }, [MAP_WIDTH,MAP_HEIGHT]);
-        image.close();
-      }));
-    }
-    this.ring = device.createTexture({ label: "Saturn ring opacity", size: [1024,64], format: "rgba8unorm-srgb", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT });
-    const ringImage = await bitmap("2k_saturn_ring_alpha.png",1024,64);
-    device.queue.copyExternalImageToTexture({ source: ringImage },{ texture: this.ring },[1024,64]);
-    ringImage.close();
-
-    progress("Preparing the planets");
-    const mipEncoder = device.createCommandEncoder({ label: "Generate texture mipmaps once" });
-    for (let layer = 0; layer < MAP_LAYERS; layer++) {
-      for (let mip = 1; mip < 11; mip++) {
-        const input = this.maps.createView({ dimension: "2d", baseArrayLayer: layer, arrayLayerCount: 1, baseMipLevel: mip-1, mipLevelCount: 1 });
-        const output = this.maps.createView({ dimension: "2d", baseArrayLayer: layer, arrayLayerCount: 1, baseMipLevel: mip, mipLevelCount: 1 });
-        const bind = device.createBindGroup({ layout: mipPipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: input },{ binding: 1, resource: this.linearSampler }] });
-        const pass = mipEncoder.beginRenderPass({ colorAttachments: [{ view: output, loadOp: "clear", storeOp: "store" }] });
-        pass.setPipeline(mipPipeline); pass.setBindGroup(0,bind); pass.draw(3); pass.end();
+    const textures = await allocatePlanetTextures(device,async ({ maps, ring, width, height, ringWidth, ringHeight, mipLevelCount }) => {
+      const filenames = BODIES.map(body => body.texture).concat("2k_earth_nightmap.jpg","2k_earth_clouds.jpg");
+      // Decode two images at a time and release each bitmap immediately after upload.
+      for (let start = 0; start < MAP_LAYERS; start += 2) {
+        const uploads = await Promise.allSettled(filenames.slice(start,start+2).map(async (name,offset) => {
+          progress(`Loading ${start+offset+1} / ${MAP_LAYERS+1} textures`);
+          const image = await bitmap(name,width,height);
+          try { device.queue.copyExternalImageToTexture({ source: image }, { texture: maps, origin: [0,0,start+offset] }, [width,height]); }
+          finally { image.close(); }
+        }));
+        for (const upload of uploads) if (upload.status==="rejected") throw upload.reason;
       }
-    }
-    device.queue.submit([mipEncoder.finish()]);
+      const ringImage = await bitmap("2k_saturn_ring_alpha.png",ringWidth,ringHeight);
+      try { device.queue.copyExternalImageToTexture({ source: ringImage },{ texture: ring },[ringWidth,ringHeight]); }
+      finally { ringImage.close(); }
+
+      progress("Preparing textures");
+      const mipEncoder = device.createCommandEncoder({ label: "Generate texture mipmaps once" });
+      for (let layer = 0; layer < MAP_LAYERS; layer++) {
+        for (let mip = 1; mip < mipLevelCount; mip++) {
+          const input = maps.createView({ dimension: "2d", baseArrayLayer: layer, arrayLayerCount: 1, baseMipLevel: mip-1, mipLevelCount: 1 });
+          const output = maps.createView({ dimension: "2d", baseArrayLayer: layer, arrayLayerCount: 1, baseMipLevel: mip, mipLevelCount: 1 });
+          const bind = device.createBindGroup({ layout: mipPipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: input },{ binding: 1, resource: this.linearSampler }] });
+          const pass = mipEncoder.beginRenderPass({ colorAttachments: [{ view: output, loadOp: "clear", storeOp: "store" }] });
+          pass.setPipeline(mipPipeline); pass.setBindGroup(0,bind); pass.draw(3); pass.end();
+        }
+      }
+      device.queue.submit([mipEncoder.finish()]);
+    });
+    this.maps = textures.maps; this.ring = textures.ring;
     this.sceneBind = device.createBindGroup({ layout: scenePipeline.getBindGroupLayout(0), entries: [
       { binding: 0, resource: { buffer: this.uniformBuffer } },{ binding: 1, resource: { buffer: this.bodyBuffer } },
-      { binding: 2, resource: this.maps.createView({ dimension: "2d-array" }) },{ binding: 3, resource: this.mapSampler },{ binding: 4, resource: this.ring.createView() },
+      { binding: 2, resource: this.maps.createView({ dimension: "2d-array" }) },{ binding: 3, resource: this.mapSampler },{ binding: 4, resource: this.ring.createView() },{ binding: 5, resource: { buffer: this.orbitBuffer } },
     ] });
     this.resize();
     await device.queue.onSubmittedWorkDone();
@@ -141,16 +148,21 @@ export class Renderer {
   }
 
   render(camera,simulation,selected) {
+    this.orbitDetails.update(simulation,camera);
+    this.prepareAnnotations?.(this.orbitDetails);
     const u = this.uniforms;
     u[0] = camera.eye[0]; u[1] = camera.eye[1]; u[2] = camera.eye[2]; u[3] = camera.tanFov;
     u[4] = camera.right[0]; u[5] = camera.right[1]; u[6] = camera.right[2]; u[7] = this.width/this.height;
     u[8] = camera.up[0]; u[9] = camera.up[1]; u[10] = camera.up[2]; u[11] = simulation.elapsedSeconds;
     u[12] = camera.forward[0]; u[13] = camera.forward[1]; u[14] = camera.forward[2]; u[15] = this.exposure;
     u[16] = this.width; u[17] = this.height; u[18] = selected; u[19] = this.orbits ? 1 : 0;
-    u[20] = this.bloom ? 0.65 : 0; u[21] = this.atmospheres ? 1 : 0;
+    u[20] = this.bloom ? 0.325 : 0; u[21] = this.atmospheres ? 1 : 0;
+    u[22] = this.width/this.canvas.clientWidth;
+    u[23] = this.orbitDetails.saturnLod.opacity>0 ? this.markerOpacity : 0;
     const device = this.device;
     device.queue.writeBuffer(this.uniformBuffer,0,u);
     device.queue.writeBuffer(this.bodyBuffer,0,simulation.data);
+    device.queue.writeBuffer(this.orbitBuffer,0,this.orbitDetails.data);
     const encoder = device.createCommandEncoder(this.encoderDescriptor);
     const scene = encoder.beginRenderPass(this.scenePass);
     scene.setPipeline(this.scenePipeline); scene.setBindGroup(0,this.sceneBind); scene.draw(3); scene.end();
@@ -172,7 +184,7 @@ export class Renderer {
   destroy() {
     this.disposed = true;
     this.sceneTexture?.destroy(); this.bloomA?.destroy(); this.bloomB?.destroy();
-    this.maps?.destroy(); this.ring?.destroy(); this.uniformBuffer?.destroy(); this.bodyBuffer?.destroy();
+    this.maps?.destroy(); this.ring?.destroy(); this.uniformBuffer?.destroy(); this.bodyBuffer?.destroy(); this.orbitBuffer?.destroy();
     this.context?.unconfigure(); this.device?.destroy();
   }
 }

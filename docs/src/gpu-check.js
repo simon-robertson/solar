@@ -2,6 +2,7 @@ import { Renderer } from "./renderer.js";
 import { Simulation } from "./simulation.js";
 import { Camera } from "./camera.js";
 import { BODY_FLOATS } from "./data.js";
+import { checkAtmospheres } from "./atmosphere-check.js";
 
 const summary = document.getElementById("summary");
 const results = document.getElementById("results");
@@ -30,6 +31,49 @@ try {
   const targetView = target.createView();
   renderer.sceneAttachment.view = targetView;
   const readback = device.createBuffer({ size: 256,usage: GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ });
+  const mapWidth = renderer.maps.width, mapLevels = renderer.maps.mipLevelCount;
+  check("Texture dimensions and full mip chain match the selected profile",
+    (mapWidth===2048 || mapWidth===1024) && renderer.maps.height===mapWidth/2 &&
+    mapLevels===Math.log2(mapWidth)+1 && renderer.ring.width===mapWidth &&
+    renderer.ring.height===(mapWidth===2048?125:64),`${mapWidth} × ${renderer.maps.height}, ${mapLevels} levels`);
+  // Probe the production LOD function and sample the last generated level of
+  // every layer. A black/uninitialized tail would otherwise be easy to miss.
+  const textureProbeModule = device.createShaderModule({ code:
+    await (await fetch(new URL("./scene.wgsl",import.meta.url))).text() + `
+@group(1) @binding(0) var<storage, read_write> textureResults: array<vec4f>;
+@compute @workgroup_size(16) fn probeTextures(@builtin(global_invocation_id) id: vec3u) {
+  if (id.x<12u) {
+    textureResults[id.x] = textureSampleLevel(maps,mapSampler,vec2f(0.5),i32(id.x),f32(textureNumLevels(maps)-1u));
+  } else if (id.x==12u) {
+    textureResults[12] = vec4f(textureLOD(TAU,1.0,1.0),textureLOD(1e9,1.0,1.0),0.0,0.0);
+  }
+}` });
+  const textureProbePipeline = await device.createComputePipelineAsync({ layout: "auto", compute: { module: textureProbeModule, entryPoint: "probeTextures" } });
+  const textureProbeOutput = device.createBuffer({ size: 208, usage: GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC });
+  const textureProbeBind = device.createBindGroup({ layout: textureProbePipeline.getBindGroupLayout(0), entries: [
+    { binding: 0, resource: { buffer: renderer.uniformBuffer } },
+    { binding: 2, resource: renderer.maps.createView({ dimension: "2d-array" }) },
+    { binding: 3, resource: renderer.mapSampler },
+  ] });
+  const textureProbeResult = device.createBindGroup({ layout: textureProbePipeline.getBindGroupLayout(1), entries: [{ binding: 0, resource: { buffer: textureProbeOutput } }] });
+  const probeUniforms = new Float32Array(24);
+  probeUniforms[3] = 1; probeUniforms[17] = 1024;
+  device.queue.writeBuffer(renderer.uniformBuffer,0,probeUniforms);
+  const textureProbeEncoder = device.createCommandEncoder();
+  const textureProbePass = textureProbeEncoder.beginComputePass();
+  textureProbePass.setPipeline(textureProbePipeline); textureProbePass.setBindGroup(0,textureProbeBind); textureProbePass.setBindGroup(1,textureProbeResult);
+  textureProbePass.dispatchWorkgroups(1); textureProbePass.end();
+  textureProbeEncoder.copyBufferToBuffer(textureProbeOutput,0,readback,0,208);
+  device.queue.submit([textureProbeEncoder.finish()]);
+  await readback.mapAsync(GPUMapMode.READ);
+  const textureValues = new Float32Array(readback.getMappedRange());
+  let populatedMips = true;
+  for (let i = 0; i < 12; i++) populatedMips &&= textureValues[i*4]+textureValues[i*4+1]+textureValues[i*4+2]>.00001;
+  check("Every texture layer has a populated final 1 × 1 mip",populatedMips);
+  check("Production LOD follows texture width and clamps to its final mip",
+    Math.abs(textureValues[48]-Math.log2(mapWidth/512))<.0001 && textureValues[49]===mapLevels-1);
+  readback.unmap(); textureProbeOutput.destroy();
+  await checkAtmospheres(renderer,simulation,check);
   camera.eye.set([7.5,0,0]); camera.forward.set([1,0,0]);
   camera.right.set([0,0,1]); camera.up.set([0,1,0]);
   const data = simulation.data;
