@@ -1,5 +1,16 @@
 # Project instructions
 
+## Documentation
+
+`docs/` is the deployed public web root, not a documentation directory. Keep
+development Markdown, implementation notes, reviews, benchmark results and agent
+handoffs in root `notes/`. Start with [notes/README.md](notes/README.md) for context
+and keep that index current when adding notes. This applies to all agents and
+subagents. Keep the project README and these instructions at the repository root.
+
+Visitor-facing texture credits remain in the site's About dialog; the detailed
+attribution record is in `notes/TEXTURE-ATTRIBUTION.md`.
+
 ## Visual consistency
 
 Keep equivalent UI elements visually consistent. Reuse shared typography, casing,

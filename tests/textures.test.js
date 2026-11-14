@@ -37,7 +37,7 @@ function mockDevice({ limit = 8192, layers = 256, oomWidths = [], deferred = fal
 test("original planet and ring textures retain their size and full mip chain",async () => {
   const device = mockDevice();
   const textures = await allocatePlanetTextures(device,async () => {});
-  expect(textures.maps.size).toEqual([2048,1024,12]);
+  expect(textures.maps.size).toEqual([2048,1024,13]);
   expect(textures.maps.mipLevelCount).toBe(12);
   expect(textures.ring.size).toEqual([2048,125]);
   expect(device.attempts).toEqual([2048]);
@@ -48,7 +48,7 @@ test("device dimension limits skip unsupported 2K allocations",async () => {
   const device = mockDevice({ limit: 1024 });
   const textures = await allocatePlanetTextures(device,async () => {});
   expect(device.attempts).toEqual([1024]);
-  expect(textures.maps.size).toEqual([1024,512,12]);
+  expect(textures.maps.size).toEqual([1024,512,13]);
   expect(textures.maps.mipLevelCount).toBe(11);
   expect(textures.ring.size).toEqual([1024,64]);
 });
@@ -63,7 +63,7 @@ for (const deferred of [false,true]) {
     });
     expect(initialized).toEqual([2048,1024]);
     expect(device.attempts).toEqual([2048,1024]);
-    expect(textures.maps.size).toEqual([1024,512,12]);
+    expect(textures.maps.size).toEqual([1024,512,13]);
     expect(textures.maps.destroyed).toBe(false);
     expect(device.scopes).toEqual([]);
   });
@@ -92,7 +92,7 @@ test("asset failures preserve the error and release resources without retrying",
 });
 
 test("insufficient layer or dimension limits fail without attempting an invalid allocation",async () => {
-  for (const options of [{ layers: 8 },{ limit: 512 }]) {
+  for (const options of [{ layers: 12 },{ limit: 512 }]) {
     const device = mockDevice(options);
     await expect(allocatePlanetTextures(device,async () => {})).rejects.toThrow("GPU cannot support");
     expect(device.textures).toEqual([]);

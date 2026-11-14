@@ -1,10 +1,12 @@
-export const MAP_LAYERS = 12;
+export const SKY_LAYER = 12;
+export const SKY_TEXTURE = "gaia-early-dr3-sky.png";
+export const MAP_LAYERS = SKY_LAYER+1;
 
 // Keep uploads and mip generation inside the scopes too: an implementation can
 // defer backing-memory allocation until the texture is first used.
 export async function allocatePlanetTextures(device, initialize) {
   if (device.limits.maxTextureArrayLayers<MAP_LAYERS) {
-    throw new Error("The GPU cannot support the solar system’s 12 texture layers.");
+    throw new Error(`The GPU cannot support the solar system’s ${MAP_LAYERS} texture layers.`);
   }
   let allocationError;
   for (const width of [2048,1024]) {

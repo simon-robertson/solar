@@ -19,6 +19,7 @@ export class Simulation {
   constructor(epochDays = toEpochDays(Date.now())) {
     this.days = epochDays;
     this.elapsedSeconds = 0;
+    this.solarSeconds = 0;
     this.deltaSeconds = 0;
     this.speed = 1 / 24; // Simulated days per real second: one hour per second.
     this.paused = false;
@@ -29,6 +30,7 @@ export class Simulation {
   reset(epochDays = toEpochDays(Date.now())) {
     this.days = Math.min(MAX_DAY, Math.max(MIN_DAY, epochDays));
     this.elapsedSeconds = 0;
+    this.solarSeconds = 0;
     this.updateBodies();
   }
 
@@ -38,6 +40,9 @@ export class Simulation {
     this.deltaSeconds = dt;
     this.elapsedSeconds += dt;
     if (!this.paused) {
+      // An illustrative activity clock: normal playback is real time, reverse
+      // reverses activity, and high orbital speeds cap activity at eightfold.
+      this.solarSeconds += dt*Math.max(-8,Math.min(8,this.speed*24));
       this.days = Math.min(MAX_DAY, Math.max(MIN_DAY, this.days + dt * this.speed));
       if (this.days === MIN_DAY || this.days === MAX_DAY) this.paused = true;
     }

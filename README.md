@@ -21,14 +21,19 @@ HTML links resolve relative to the page, and JavaScript assets resolve relative
 to their module URLs. This supports both localhost at `/` and GitHub Pages at
 `/solar/`, without configuring a deployment prefix.
 
+Development documentation lives in [`notes/`](notes/README.md), outside the public
+web root. Contributors and agents should start with that index and `AGENTS.md`.
+Keep implementation notes, reviews and benchmark records out of `docs/`.
+
 The downloaded textures are included. To restore missing assets:
 
 ```sh
 bun run textures
 ```
 
-This downloads the original maps directly from Solar System Scope, caches existing
-files, limits download concurrency and checks HTTP status and image MIME types.
+This downloads the original planetary maps from Solar System Scope and the Gaia
+sky panorama from ESA. It caches existing files, limits download concurrency and
+checks HTTP status and image MIME types.
 
 ## GitHub Pages
 
@@ -42,7 +47,7 @@ See [GitHub's publishing-source documentation](https://docs.github.com/en/pages/
 
 - Select a world in the bottom rail to fly closer. System view returns to overview.
 - Move near Saturn to reveal seven major moons as non-interactive circle markers.
-  This proximity detail fades out when you zoom away; see [orbital detail and LOD](docs/ORBITAL-DETAIL.md).
+  This proximity detail fades out when you zoom away; see [orbital detail and LOD](notes/ORBITAL-DETAIL.md).
 - Drag the scene to orbit; scroll to zoom. Click a planet to focus it.
 - Body labels hide during camera movement and fade back in once the camera settles.
 - Tab (or Shift+Tab) shows/hides the information panel instead of moving focus.
@@ -87,12 +92,30 @@ Each steady frame has **2–4 draw calls**, below the budget of ten:
 4. The composite shader adds bloom, applies an ACES-style tone curve, a vignette
    and display gamma.
 
+The Sun's warm texture evolves through coherent surface flow, filtered fine
+detail and limb darkening in the sphere shader. Its animated surface and glow
+require no additional draw. Surface animation pauses with playback and
+reduced-motion startup, reverses with time, and follows the speed control with
+an eightfold cap. Reset restarts the animation. It is illustrative rather than
+a reconstruction of historical solar weather. See [Sun visuals](notes/SUN-VISUALS.md)
+for sources, filtering, validation and measured rendering costs.
+
 Bloom uses **three compute dispatches in one compute pass**: half-resolution
 threshold/downsample and horizontal/vertical blur. Turning bloom off skips these
-dispatches and the composite's bloom sample. The same Gaussian blur weights are
-precomputed and normalized. No shadow maps, planet meshes, per-planet draws or
-depth buffer. See [the rendering review](docs/RENDERING-REVIEW.md) for validation
+dispatches and the composite's bloom sample. Precomputed Gaussian weights pair
+adjacent taps with linear filtering, using nine reads for the same 17-tap kernel.
+No shadow maps, planet meshes, per-planet draws or depth buffer.
+See [the rendering review](notes/RENDERING-REVIEW.md) for validation
 and measured before/after costs.
+
+The background combines an ESA/Gaia Milky Way panorama with illustrative point
+stars. Its Galactic orientation is fixed in the J2000 world frame. The panorama
+preserves observed stellar clouds, a brighter central region and dust lanes;
+procedural stars vary in position, brightness and colour, with higher density
+near the Galactic plane. Explicit mip selection and pixel-footprint filtering
+reduce aliasing during movement and resolution changes. This uses the existing
+scene draw and one additional texture-array layer. See [the sky notes](notes/MILKY-WAY.md)
+for the approximation, attribution, validation and measured cost.
 
 Texture initialization checks the device’s dimension and array-layer limits, then
 tries the original 2048 × 1024 maps and 2048 × 125 Saturn ring. If texture allocation,
@@ -101,9 +124,9 @@ texture set and retries at 1024 × 512 (1024 × 64 for the ring). Asset failures
 unrelated validation errors are reported rather than retried. Image decoding uses
 at most two concurrent bitmaps, each closed after upload.
 
-The 12-layer sRGB array occupies approximately 128 MiB at 2K or 32 MiB at 1K,
-including mipmaps. The full chains have 12 or 11 levels, generated with 132 or 120
-extra **startup-only** draws, respectively, excluded from the steady-frame count.
+The 13-layer sRGB array occupies approximately 139 MiB at 2K or 35 MiB at 1K,
+including mipmaps and the sky layer. The full chains have 12 or 11 levels,
+generated with 143 or 130 extra **startup-only** draws, respectively, excluded from the steady-frame count.
 Explicit texture LOD reads the actual texture dimensions and level count, avoiding
 invalid implicit derivatives inside divergent ray-hit branches and reducing distant
 texture aliasing. **Rendering diagnostics → Texture maps** reports the chosen size.
@@ -126,8 +149,9 @@ are necessarily fresh handles each frame; the loop is allocation-conscious, not
 literally allocation-free. Teardown releases textures, buffers and the device.
 Resolution defaults to at most 1.5× device pixel ratio, with adjustable quality.
 
-Diagnostics report frame intervals and CPU submission time; they are **not GPU
-timestamp measurements**. Performance depends on browser, GPU and resolution.
+Diagnostics report frame intervals and CPU frame work (simulation, camera,
+render submission and annotations); they are **not GPU timestamp measurements**.
+Performance depends on browser, GPU and resolution.
 
 ### Finite-Sun shadows
 
@@ -167,7 +191,7 @@ Distances and body sizes are compressed independently for visibility. Earth's
 orbit uses the Earth–Moon barycentre as an approximation; the Moon has a simplified
 Earth-centred Kepler ellipse. Rotation/axial tilt and lighting are illustrative;
 this is not a precision ephemeris or N-body integration. Atmospheres use bounded single scattering with display-calibrated density profiles
-(see [atmosphere model and validation](docs/ATMOSPHERES.md)), and eclipses follow the finite display
+(see [atmosphere model and validation](notes/ATMOSPHERES.md)), and eclipses follow the finite display
 Sun as described above. The solar system is rendered in ordinary single-precision GPU display
 coordinates. Labels, informational facts and texture colours are for exploration.
 
@@ -177,7 +201,7 @@ Sources:
 - [JPL planetary physical parameters](https://ssd.jpl.nasa.gov/planets/phys_par.html)
 - [Solar System Scope textures](https://www.solarsystemscope.com/textures/),
   [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
-  See [texture attribution](docs/assets/textures/ATTRIBUTION.md).
+  See [texture attribution](notes/TEXTURE-ATTRIBUTION.md).
 
 ## Verification
 
@@ -200,14 +224,17 @@ offset relative to the selected body, so zoom settling never triggers a snap.
 Texture-allocation tests cover native 2K selection, dimension limits, immediate
 and deferred out-of-memory fallback, resource cleanup, and unrelated failures.
 
-Open **http://127.0.0.1:3000/verify.html** to run 32 checks on the actual GPU:
+Open **http://127.0.0.1:3000/verify.html** to run 40 checks on the actual GPU:
 texture profiles, final mip contents, resolution-dependent LOD, atmosphere geometry,
 optical depth and attenuation against independent numerical references,
 night-side/eclipsed atmosphere suppression, foreground/ring occlusion,
 production-shader compilation, pixel-readback sunlight/eclipses/background tests,
 frame-resource reuse, resolution rebuilds, Gaussian blur against an independent
 double-precision convolution, bloom dispatch counts and WebGPU
-validation. The controlled shadow test moves the Moon between the Sun and Earth's
+validation. Solar checks cover surface evolution at fixed rotation, pause/reverse,
+contrast/colour/clipping against the original Sun, eclipsed disc/aureole and
+the two-draw solar rendering budget. The controlled shadow test
+moves the Moon between the Sun and Earth's
 visible lit surface, measures the brightness reduction, then moves it away and
 checks that illumination returns. Additional tests exercise the production WGSL
 visibility function directly: total and annular eclipses, a penumbra sweep,
@@ -216,13 +243,27 @@ blockers. An independent Cartesian solar-disc integration checks the analytic
 result against 3D ray/sphere silhouettes. The test page destroys its GPU resources
 when finished.
 
+For sky-only changes, open **http://127.0.0.1:3000/sky-verify.html** for 14 focused
+GPU checks: Galactic orientation, independent Gaia panorama samples, seams/poles,
+clock/camera invariance, filtering, occlusion and the draw budget. Texture-profile
+changes also use `bun test tests/textures.test.js`.
+
 HTTP checks cover assets and MIME types, missing files, private-file/path-traversal
 rejection, HEAD and unsupported methods. Browser QA also covers Earth and Saturn
 closeups, playback controls and render settings.
 
 Controlled atmosphere views and a batch-completion benchmark are available at
-**http://127.0.0.1:3000/atmospheres.html**. See [the atmosphere notes](docs/ATMOSPHERES.md)
+**http://127.0.0.1:3000/atmospheres.html**. See [the atmosphere notes](notes/ATMOSPHERES.md)
 for the model, reference images, measured cost and numerical error bounds.
+
+The standalone **http://127.0.0.1:3000/render-benchmark.html** reports CPU
+encoding/submission, frame-completion wall time and optional GPU batch timestamps
+separately. It verifies actual target dimensions and records seven 48-frame
+batches after warm-up. Add `?width=1920&height=1080` for full HD, optionally
+`&bloom=0` or `&atmospheres=0`. Timestamp queries are requested only by this tool;
+adapters without them still report CPU and completion timings. See the
+[follow-up rendering review](notes/RENDERING-OPTIMISATIONS.md) for measured results,
+pixel differences and rejected alternatives.
 
 ## Files
 
@@ -232,4 +273,5 @@ for the model, reference images, measured cost and numerical error bounds.
 - `docs/src/camera.js`, `docs/src/app.js`: camera, interactions and frame lifecycle.
 - `docs/src/renderer.js`: WebGPU resources and rendering pipeline.
 - `docs/src/*.wgsl`: scene, post-processing, composite and startup mipmaps.
-- `docs/assets/`: locally served texture assets and attribution.
+- `docs/assets/`: locally served texture assets; visitor-facing credits are in About.
+- `notes/`: development documentation, rendering reviews, measurements and texture attribution.

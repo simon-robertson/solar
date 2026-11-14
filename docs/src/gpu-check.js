@@ -3,6 +3,8 @@ import { Simulation } from "./simulation.js";
 import { Camera } from "./camera.js";
 import { BODY_FLOATS } from "./data.js";
 import { checkAtmospheres } from "./atmosphere-check.js";
+import { checkSolar } from "./solar-check.js";
+import { MAP_LAYERS } from "./textures.js";
 
 const summary = document.getElementById("summary");
 const results = document.getElementById("results");
@@ -21,68 +23,81 @@ function half(value) {
   return sign * (exp===0 ? Math.pow(2,-14)*(fraction/1024) : exp===31 ? Infinity : Math.pow(2,exp-15)*(1+fraction/1024));
 }
 
-async function checkBloom(renderer) {
-  const device = renderer.device, size = 17, stride = 256, resources = [];
+async function checkBloomSize(renderer,width,height) {
+  const device = renderer.device, stride = Math.ceil(width*8/256)*256, resources = [];
   const texture = usage => {
-    const value = device.createTexture({ size: [size,size], format: "rgba16float", usage });
+    const value = device.createTexture({ size: [width,height], format: "rgba16float", usage });
     resources.push(value); return value;
   };
   const source = texture(GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST);
   const a = texture(GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.STORAGE_BINDING);
   const b = texture(GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.COPY_SRC);
-  const readback = device.createBuffer({ size: stride*size, usage: GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ });
+  const readback = device.createBuffer({ size: stride*height, usage: GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ });
   resources.push(readback);
   try {
-    const pixels = new Uint16Array(stride*size/2), reference = new Float64Array(size*size*3);
-    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-      const o = y*stride/2+x*4, r = (y*size+x)*3;
+    const pixels = new Uint16Array(stride*height/2), reference = new Float64Array(width*height*3);
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+      const o = y*stride/2+x*4, r = (y*width+x)*3;
       pixels[o] = x===8 && y===8 ? 0x3c00 : 0; // Unit impulse.
       pixels[o+1] = 0x3800; // Constant field tests normalization at the borders.
       pixels[o+2] = x===0 || y===0 ? 0x3400 : 0; // Edge impulses test clamping.
       reference[r] = x===8 && y===8 ? 1 : 0;
       reference[r+1] = .5; reference[r+2] = x===0 || y===0 ? .25 : 0;
     }
-    device.queue.writeTexture({ texture: source },pixels,{ bytesPerRow: stride },[size,size]);
+    device.queue.writeTexture({ texture: source },pixels,{ bytesPerRow: stride },[width,height]);
     const encoder = device.createCommandEncoder(), pass = encoder.beginComputePass();
     for (const [pipeline,input,output] of [[renderer.blurXPipeline,source,a],[renderer.blurYPipeline,a,b]]) {
       const bind = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [
         { binding: 0, resource: input.createView() },{ binding: 1, resource: output.createView() },
+        { binding: 2, resource: renderer.linearSampler },
       ] });
-      pass.setPipeline(pipeline); pass.setBindGroup(0,bind); pass.dispatchWorkgroups(3,3);
+      pass.setPipeline(pipeline); pass.setBindGroup(0,bind); pass.dispatchWorkgroups(Math.ceil(width/8),Math.ceil(height/8));
     }
-    pass.end(); encoder.copyTextureToBuffer({ texture: b },{ buffer: readback,bytesPerRow: stride },[size,size]);
+    pass.end(); encoder.copyTextureToBuffer({ texture: b },{ buffer: readback,bytesPerRow: stride },[width,height]);
     device.queue.submit([encoder.finish()]); await readback.mapAsync(GPUMapMode.READ);
     // Independent original Gaussian formula, evaluated in double precision.
     let expected = reference;
     for (const axis of [0,1]) {
       const next = new Float64Array(expected.length);
-      for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
         let normalization = 0;
         for (let offset = -8; offset <= 8; offset++) {
           const weight = Math.exp(-offset*offset/24);
-          const xx = Math.max(0,Math.min(size-1,x+(axis===0?offset:0)));
-          const yy = Math.max(0,Math.min(size-1,y+(axis===1?offset:0)));
-          for (let c = 0; c < 3; c++) next[(y*size+x)*3+c] += expected[(yy*size+xx)*3+c]*weight;
+          const xx = Math.max(0,Math.min(width-1,x+(axis===0?offset:0)));
+          const yy = Math.max(0,Math.min(height-1,y+(axis===1?offset:0)));
+          for (let c = 0; c < 3; c++) next[(y*width+x)*3+c] += expected[(yy*width+xx)*3+c]*weight;
           normalization += weight;
         }
-        for (let c = 0; c < 3; c++) next[(y*size+x)*3+c] /= normalization;
+        for (let c = 0; c < 3; c++) next[(y*width+x)*3+c] /= normalization;
       }
       expected = next;
     }
     const actual = new Uint16Array(readback.getMappedRange());
     let error = 0;
-    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) for (let c = 0; c < 3; c++) {
-      error = Math.max(error,Math.abs(half(actual[y*stride/2+x*4+c])-expected[(y*size+x)*3+c]));
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) for (let c = 0; c < 3; c++) {
+      error = Math.max(error,Math.abs(half(actual[y*stride/2+x*4+c])-expected[(y*width+x)*3+c]));
     }
-    check("Optimized bloom preserves Gaussian shape, energy and edge clamping",error<.0005,`max HDR error ${error.toExponential(1)}`);
     readback.unmap();
+    return error;
   } finally { for (const resource of resources) resource.destroy(); }
+}
+
+async function checkBloom(renderer) {
+  let error = 0;
+  // Non-square, partial-workgroup and single-texel axes exercise sampler
+  // clamping and dispatch bounds independently of the production target size.
+  for (const [width,height] of [[17,17],[1,1],[1,19],[19,1],[31,19],[257,3]]) {
+    error = Math.max(error,await checkBloomSize(renderer,width,height));
+  }
+  check("Optimized bloom preserves Gaussian shape, energy and edge clamping",error<.0005,
+    `6 texture sizes, max HDR error ${error.toExponential(1)}`);
 }
 
 try {
   const simulation = new Simulation(0), camera = new Camera();
   await renderer.init(simulation.data,message => { summary.textContent = message; });
   renderer.bloom = false; renderer.atmospheres = false; renderer.orbits = false; renderer.markerOpacity = 0;
+  await checkSolar(renderer,check);
   const device = renderer.device;
   device.pushErrorScope("validation");
   const target = device.createTexture({ size: [renderer.width,renderer.height],format: "rgba16float",usage: GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC });
@@ -100,14 +115,15 @@ try {
     await (await fetch(new URL("./scene.wgsl",import.meta.url))).text() + `
 @group(1) @binding(0) var<storage, read_write> textureResults: array<vec4f>;
 @compute @workgroup_size(16) fn probeTextures(@builtin(global_invocation_id) id: vec3u) {
-  if (id.x<12u) {
+  if (id.x<${MAP_LAYERS}u) {
     textureResults[id.x] = textureSampleLevel(maps,mapSampler,vec2f(0.5),i32(id.x),f32(textureNumLevels(maps)-1u));
-  } else if (id.x==12u) {
-    textureResults[12] = vec4f(textureLOD(TAU,1.0,1.0),textureLOD(1e9,1.0,1.0),0.0,0.0);
+  } else if (id.x==${MAP_LAYERS}u) {
+    textureResults[${MAP_LAYERS}] = vec4f(textureLOD(TAU,1.0,1.0),textureLOD(1e9,1.0,1.0),0.0,0.0);
   }
 }` });
   const textureProbePipeline = await device.createComputePipelineAsync({ layout: "auto", compute: { module: textureProbeModule, entryPoint: "probeTextures" } });
-  const textureProbeOutput = device.createBuffer({ size: 208, usage: GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC });
+  const probeBytes = (MAP_LAYERS+1)*16;
+  const textureProbeOutput = device.createBuffer({ size: probeBytes, usage: GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC });
   const textureProbeBind = device.createBindGroup({ layout: textureProbePipeline.getBindGroupLayout(0), entries: [
     { binding: 0, resource: { buffer: renderer.uniformBuffer } },
     { binding: 2, resource: renderer.maps.createView({ dimension: "2d-array" }) },
@@ -121,15 +137,15 @@ try {
   const textureProbePass = textureProbeEncoder.beginComputePass();
   textureProbePass.setPipeline(textureProbePipeline); textureProbePass.setBindGroup(0,textureProbeBind); textureProbePass.setBindGroup(1,textureProbeResult);
   textureProbePass.dispatchWorkgroups(1); textureProbePass.end();
-  textureProbeEncoder.copyBufferToBuffer(textureProbeOutput,0,readback,0,208);
+  textureProbeEncoder.copyBufferToBuffer(textureProbeOutput,0,readback,0,probeBytes);
   device.queue.submit([textureProbeEncoder.finish()]);
   await readback.mapAsync(GPUMapMode.READ);
   const textureValues = new Float32Array(readback.getMappedRange());
   let populatedMips = true;
-  for (let i = 0; i < 12; i++) populatedMips &&= textureValues[i*4]+textureValues[i*4+1]+textureValues[i*4+2]>.00001;
+  for (let i = 0; i < MAP_LAYERS; i++) populatedMips &&= textureValues[i*4]+textureValues[i*4+1]+textureValues[i*4+2]>.00001;
   check("Every texture layer has a populated final 1 × 1 mip",populatedMips);
   check("Production LOD follows texture width and clamps to its final mip",
-    Math.abs(textureValues[48]-Math.log2(mapWidth/512))<.0001 && textureValues[49]===mapLevels-1);
+    Math.abs(textureValues[MAP_LAYERS*4]-Math.log2(mapWidth/512))<.0001 && textureValues[MAP_LAYERS*4+1]===mapLevels-1);
   readback.unmap(); textureProbeOutput.destroy();
   await checkAtmospheres(renderer,simulation,check);
   await checkBloom(renderer);

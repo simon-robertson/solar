@@ -1,0 +1,1462 @@
+{
+  "date": "2026-11-14",
+  "baseline": {
+    "head": "409a5ef8968ad94ca249896e867a7940ba414cc2",
+    "includesPriorUncommittedWork": true,
+    "sha256": {
+      "mipmap.wgsl": "645fea3979abb86bec9ceab5aa3077b33c1983fecaf44029fbef578b146d18b3",
+      "renderer.js": "071e34da5f2444cc751b9a7f81801af14fedca9d345c4d606bc5c98c04b14ca8",
+      "composite.wgsl": "2aaba44584a341e295f2777ad4e68c70b1b3193405cd2b1293336881ecdefe63",
+      "scene.wgsl": "00ae9a608e877a40034da73bab9b41f26f9e68436fbba0e3b27b9a47bc383cc9",
+      "orbit-details.js": "8dbdb18286aa379a25996fb7210ac5417b752aeba4ddd252bd604d4f39ed1181",
+      "atmosphere-check.js": "a8ea1da0c5d47ef9b9cac48ea49383b4f93aec406c5e288e3888736bfc35df8b",
+      "simulation.js": "0cf6fbc4785ee02c619aa872afa4688106a9a7c4735f580a3719e241b5e07380",
+      "orbit-check.js": "c604439ba75f913107954f069b7669b7525a6cb11ad4744528395b3485786c72",
+      "lod.js": "e5eeb38896b014464197bf978c6c0a34b78cfc6de8e414e3a2879361d30551a1",
+      "atmosphere-preview.js": "42515012bffc31fe8dc15a259e5ee5dcfd023c9bf48a82793adf0b8d9dcc747d",
+      "render-benchmark.js": "dea44a467e5ecab3b3491abe11d3a5b5d1f815b0d3f04423152553ace2d964cd",
+      "data.js": "744461beaec5cd358abccc4665571177367437e537cad5037aa7d949a8d7c870",
+      "post.wgsl": "6a346be722b3cfaaf0e3eb964d6b5843a93bd2b1f86f0654f63bf6d6ba4557fa",
+      "textures.js": "c7bf6831ef9e7607f92324b3084ed2237ab4ca5baae66f981c74f3bd1a1a7e8d",
+      "camera.js": "60891f740b8a01279e11f70d8ab6213f1d019b9b8c46b4ae1171eef6648d1f45",
+      "gpu-check.js": "4495d498559ba3f3c10df829f17433fe894fe7dd44a4695fe8a37d6e9ce59e88",
+      "app.js": "2ac8c4d9425f2c29fa9d08b4d98f13d811dd94c623c2b657d09ce33e4b8b2f2b",
+      "solar-check.js": "d3a8ba349e31b461a0e2b446f9dbb069260eb079935addcf55e4d352463b7171"
+    }
+  },
+  "finalSourceSha256": {
+    "sky-check.js": "f40dfac91a9dda5163b525316d8a33df10b42cb18b13641ad789d1e5e6a90671",
+    "mipmap.wgsl": "645fea3979abb86bec9ceab5aa3077b33c1983fecaf44029fbef578b146d18b3",
+    "renderer.js": "d1d497b9a1f0b1bbc0e440215dd223d370d0cfc754e0c9529730fae930c221f4",
+    "composite.wgsl": "2aaba44584a341e295f2777ad4e68c70b1b3193405cd2b1293336881ecdefe63",
+    "scene.wgsl": "6deedce7d0779fa5974d92e38deb5d2095f4720e81716eb5e8d01a541ed373ce",
+    "orbit-details.js": "8dbdb18286aa379a25996fb7210ac5417b752aeba4ddd252bd604d4f39ed1181",
+    "atmosphere-check.js": "a8ea1da0c5d47ef9b9cac48ea49383b4f93aec406c5e288e3888736bfc35df8b",
+    "simulation.js": "0cf6fbc4785ee02c619aa872afa4688106a9a7c4735f580a3719e241b5e07380",
+    "sky-verify.js": "10b3cbb4c36810bc8c41e3ef2a0910451bf84a52e762df1cf7b9045842de197c",
+    "orbit-check.js": "c604439ba75f913107954f069b7669b7525a6cb11ad4744528395b3485786c72",
+    "lod.js": "e5eeb38896b014464197bf978c6c0a34b78cfc6de8e414e3a2879361d30551a1",
+    "atmosphere-preview.js": "42515012bffc31fe8dc15a259e5ee5dcfd023c9bf48a82793adf0b8d9dcc747d",
+    "render-benchmark.js": "e55b281d4a52150ab05040524883462a6c4399a259e038ec5cdff4c83e63dc97",
+    "data.js": "744461beaec5cd358abccc4665571177367437e537cad5037aa7d949a8d7c870",
+    "post.wgsl": "6a346be722b3cfaaf0e3eb964d6b5843a93bd2b1f86f0654f63bf6d6ba4557fa",
+    "textures.js": "4457c5b0667bbdf5432f8f6be7baa1d064a5492e172af305ed70897f6fbbc397",
+    "camera.js": "60891f740b8a01279e11f70d8ab6213f1d019b9b8c46b4ae1171eef6648d1f45",
+    "gpu-check.js": "7603bd9a2f7640c1566ce8df326d0546cfa1eed2d01a4fb3d9b4da7cbe574864",
+    "app.js": "2ac8c4d9425f2c29fa9d08b4d98f13d811dd94c623c2b657d09ce33e4b8b2f2b",
+    "solar-check.js": "d3a8ba349e31b461a0e2b446f9dbb069260eb079935addcf55e4d352463b7171"
+  },
+  "asset": {
+    "path": "docs/assets/textures/gaia-early-dr3-sky.png",
+    "bytes": 3885439,
+    "sha256": "a831d1a88ce6df8406f498c2f6a30d3905138f8a6262e870903133c75339f4b9"
+  },
+  "measurementUnits": "milliseconds per frame",
+  "gpuMethod": "One timestamp pair spans the whole batch; elapsed batch nanoseconds / frame count. Not a sum of per-frame ranges.",
+  "comparison": {
+    "variants": [
+      "before",
+      "Gaia texture",
+      "procedural approximation"
+    ],
+    "resolution": [
+      1920,
+      1080
+    ],
+    "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36",
+    "adapter": "metal-3",
+    "warmup": 64,
+    "batches": 7,
+    "frames": 96,
+    "results": [
+      {
+        "name": "Overview",
+        "samples": [
+          [
+            {
+              "wall": 1.8645833333333333,
+              "cpu": 0.037499999006589256,
+              "gpu": 1.8356906666666666
+            },
+            {
+              "wall": 1.844791665673256,
+              "cpu": 0.036458333333333336,
+              "gpu": 1.8220373333333333
+            },
+            {
+              "wall": 1.878125000745058,
+              "cpu": 0.036458333333333336,
+              "gpu": 1.861632
+            },
+            {
+              "wall": 1.8677083340783913,
+              "cpu": 0.044791667411724724,
+              "gpu": 1.835008
+            },
+            {
+              "wall": 1.870833333581686,
+              "cpu": 0.044791666169961296,
+              "gpu": 1.839104
+            },
+            {
+              "wall": 1.859375,
+              "cpu": 0.032291666915019356,
+              "gpu": 1.8486613333333333
+            },
+            {
+              "wall": 1.953125,
+              "cpu": 0.03541666641831398,
+              "gpu": 1.9360426666666666
+            }
+          ],
+          [
+            {
+              "wall": 2.1197916666666665,
+              "cpu": 0.036458333333333336,
+              "gpu": 2.0957866666666667
+            },
+            {
+              "wall": 2.0833333333333335,
+              "cpu": 0.028125000496705372,
+              "gpu": 2.072576
+            },
+            {
+              "wall": 2.0864583340783915,
+              "cpu": 0.04270833358168602,
+              "gpu": 2.071893333333333
+            },
+            {
+              "wall": 2.090624999254942,
+              "cpu": 0.037500000248352684,
+              "gpu": 2.072576
+            },
+            {
+              "wall": 2.1145833333333335,
+              "cpu": 0.036458333333333336,
+              "gpu": 2.098517333333333
+            },
+            {
+              "wall": 2.215624999254942,
+              "cpu": 0.024999999751647312,
+              "gpu": 2.2009173333333334
+            },
+            {
+              "wall": 2.1083333330849805,
+              "cpu": 0.00833333283662796,
+              "gpu": 2.0957866666666667
+            }
+          ],
+          [
+            {
+              "wall": 2.233333334326744,
+              "cpu": 0.043750000496705375,
+              "gpu": 2.2091093333333336
+            },
+            {
+              "wall": 2.2124999997516475,
+              "cpu": 0.03125,
+              "gpu": 2.195456
+            },
+            {
+              "wall": 2.1968750009934106,
+              "cpu": 0.025000000993410747,
+              "gpu": 2.1818026666666666
+            },
+            {
+              "wall": 2.210416667163372,
+              "cpu": 0.036458333333333336,
+              "gpu": 2.1906773333333334
+            },
+            {
+              "wall": 2.1958333340783915,
+              "cpu": 0.04270833358168602,
+              "gpu": 2.177706666666667
+            },
+            {
+              "wall": 2.1927083333333335,
+              "cpu": 0.02291666716337204,
+              "gpu": 2.1804373333333333
+            },
+            {
+              "wall": 2.191666666418314,
+              "cpu": 0.014583333084980646,
+              "gpu": 2.18112
+            }
+          ]
+        ],
+        "medians": [
+          {
+            "wall": 1.8677083340783913,
+            "cpu": 0.036458333333333336,
+            "gpu": 1.839104
+          },
+          {
+            "wall": 2.1083333330849805,
+            "cpu": 0.036458333333333336,
+            "gpu": 2.0957866666666667
+          },
+          {
+            "wall": 2.1968750009934106,
+            "cpu": 0.03125,
+            "gpu": 2.1818026666666666
+          }
+        ],
+        "draws": [
+          3,
+          3,
+          3
+        ]
+      },
+      {
+        "name": "Low angle",
+        "samples": [
+          [
+            {
+              "wall": 1.8020833333333333,
+              "cpu": 0.033333332588275276,
+              "gpu": 1.7872213333333333
+            },
+            {
+              "wall": 1.800000000745058,
+              "cpu": 0.03437500074505806,
+              "gpu": 1.7831253333333335
+            },
+            {
+              "wall": 1.8041666659216087,
+              "cpu": 0.034374999503294625,
+              "gpu": 1.787904
+            },
+            {
+              "wall": 1.8104166661699612,
+              "cpu": 0.03125,
+              "gpu": 1.7988266666666668
+            },
+            {
+              "wall": 1.8375000009934108,
+              "cpu": 0.03437500074505806,
+              "gpu": 1.8220373333333333
+            },
+            {
+              "wall": 1.8489583333333333,
+              "cpu": 0.043750000496705375,
+              "gpu": 1.8309119999999999
+            },
+            {
+              "wall": 1.8145833338300388,
+              "cpu": 0.029166667411724728,
+              "gpu": 1.7995093333333332
+            }
+          ],
+          [
+            {
+              "wall": 2.0531250002483525,
+              "cpu": 0.04270833358168602,
+              "gpu": 2.03776
+            },
+            {
+              "wall": 2.0541666659216085,
+              "cpu": 0.037499999006589256,
+              "gpu": 2.036394666666667
+            },
+            {
+              "wall": 2.051041666418314,
+              "cpu": 0.02812499925494194,
+              "gpu": 2.0370773333333334
+            },
+            {
+              "wall": 2.0770833330849805,
+              "cpu": 0.043750000496705375,
+              "gpu": 2.0609706666666665
+            },
+            {
+              "wall": 2.0552083340783915,
+              "cpu": 0.033333333830038704,
+              "gpu": 2.0384426666666666
+            },
+            {
+              "wall": 2.054166667163372,
+              "cpu": 0.036458333333333336,
+              "gpu": 2.0370773333333334
+            },
+            {
+              "wall": 2.0812499995032945,
+              "cpu": 0.020833333333333332,
+              "gpu": 2.0671146666666664
+            }
+          ],
+          [
+            {
+              "wall": 2.0416666666666665,
+              "cpu": 0.03854166716337204,
+              "gpu": 2.024106666666667
+            },
+            {
+              "wall": 2.066666666418314,
+              "cpu": 0.039583334078391395,
+              "gpu": 2.050730666666667
+            },
+            {
+              "wall": 2.0447916674117246,
+              "cpu": 0.039583334078391395,
+              "gpu": 2.024789333333333
+            },
+            {
+              "wall": 2.0447916674117246,
+              "cpu": 0.03854166716337204,
+              "gpu": 2.024789333333333
+            },
+            {
+              "wall": 2.038541667163372,
+              "cpu": 0.028125000496705372,
+              "gpu": 2.024106666666667
+            },
+            {
+              "wall": 2.1875,
+              "cpu": 0.037499999006589256,
+              "gpu": 2.1674666666666664
+            },
+            {
+              "wall": 2.070833332836628,
+              "cpu": 0.03541666641831398,
+              "gpu": 2.0534613333333334
+            }
+          ]
+        ],
+        "medians": [
+          {
+            "wall": 1.8104166661699612,
+            "cpu": 0.034374999503294625,
+            "gpu": 1.7988266666666668
+          },
+          {
+            "wall": 2.054166667163372,
+            "cpu": 0.036458333333333336,
+            "gpu": 2.03776
+          },
+          {
+            "wall": 2.0447916674117246,
+            "cpu": 0.03854166716337204,
+            "gpu": 2.024789333333333
+          }
+        ],
+        "draws": [
+          3,
+          3,
+          3
+        ]
+      },
+      {
+        "name": "Sun",
+        "samples": [
+          [
+            {
+              "wall": 1.9854166669150193,
+              "cpu": 0.043750000496705375,
+              "gpu": 1.968128
+            },
+            {
+              "wall": 1.988541666418314,
+              "cpu": 0.032291666915019356,
+              "gpu": 1.9756373333333332
+            },
+            {
+              "wall": 2.0145833330849805,
+              "cpu": 0.033333333830038704,
+              "gpu": 1.9961173333333333
+            },
+            {
+              "wall": 1.9718749995032947,
+              "cpu": 0.041666666666666664,
+              "gpu": 1.9551573333333332
+            },
+            {
+              "wall": 1.9864583338300388,
+              "cpu": 0.046875,
+              "gpu": 1.9633493333333334
+            },
+            {
+              "wall": 2.0239583340783915,
+              "cpu": 0.02291666716337204,
+              "gpu": 2.0145493333333335
+            },
+            {
+              "wall": 1.984375,
+              "cpu": 0.029166667411724728,
+              "gpu": 1.9688106666666665
+            }
+          ],
+          [
+            {
+              "wall": 2.1822916666666665,
+              "cpu": 0.04270833358168602,
+              "gpu": 2.1681493333333335
+            },
+            {
+              "wall": 2.188541665673256,
+              "cpu": 0.03958333283662796,
+              "gpu": 2.168832
+            },
+            {
+              "wall": 2.183333333581686,
+              "cpu": 0.03125,
+              "gpu": 2.17088
+            },
+            {
+              "wall": 2.183333333581686,
+              "cpu": 0.03437500074505806,
+              "gpu": 2.168832
+            },
+            {
+              "wall": 2.3197916659216085,
+              "cpu": 0.034374999503294625,
+              "gpu": 2.3012693333333334
+            },
+            {
+              "wall": 2.1875,
+              "cpu": 0.041666666666666664,
+              "gpu": 2.1715626666666665
+            },
+            {
+              "wall": 2.188541665673256,
+              "cpu": 0.041666666666666664,
+              "gpu": 2.1715626666666665
+            }
+          ],
+          [
+            {
+              "wall": 2.2291666666666665,
+              "cpu": 0.036458333333333336,
+              "gpu": 2.2132053333333332
+            },
+            {
+              "wall": 2.206250000745058,
+              "cpu": 0.036458333333333336,
+              "gpu": 2.1865813333333333
+            },
+            {
+              "wall": 2.203125,
+              "cpu": 0.04374999925494194,
+              "gpu": 2.1865813333333333
+            },
+            {
+              "wall": 2.3072916666666665,
+              "cpu": 0.03854166716337204,
+              "gpu": 2.2910293333333334
+            },
+            {
+              "wall": 2.2166666661699614,
+              "cpu": 0.03541666641831398,
+              "gpu": 2.198186666666667
+            },
+            {
+              "wall": 2.2062499995032945,
+              "cpu": 0.034374999503294625,
+              "gpu": 2.1920426666666666
+            },
+            {
+              "wall": 2.2041666669150195,
+              "cpu": 0.03854166716337204,
+              "gpu": 2.187264
+            }
+          ]
+        ],
+        "medians": [
+          {
+            "wall": 1.9864583338300388,
+            "cpu": 0.033333333830038704,
+            "gpu": 1.9688106666666665
+          },
+          {
+            "wall": 2.1875,
+            "cpu": 0.03958333283662796,
+            "gpu": 2.17088
+          },
+          {
+            "wall": 2.206250000745058,
+            "cpu": 0.036458333333333336,
+            "gpu": 2.1920426666666666
+          }
+        ],
+        "draws": [
+          3,
+          3,
+          3
+        ]
+      },
+      {
+        "name": "Earth",
+        "samples": [
+          [
+            {
+              "wall": 2.1760416676600776,
+              "cpu": 0.04270833358168602,
+              "gpu": 2.1592746666666667
+            },
+            {
+              "wall": 2.1854166661699614,
+              "cpu": 0.036458333333333336,
+              "gpu": 2.1667840000000003
+            },
+            {
+              "wall": 2.2749999997516475,
+              "cpu": 0.02395833283662796,
+              "gpu": 2.2637226666666668
+            },
+            {
+              "wall": 2.1791666659216085,
+              "cpu": 0.033333332588275276,
+              "gpu": 2.1626879999999997
+            },
+            {
+              "wall": 2.1812499997516475,
+              "cpu": 0.040624999751647316,
+              "gpu": 2.1654186666666666
+            },
+            {
+              "wall": 2.202083334326744,
+              "cpu": 0.033333333830038704,
+              "gpu": 2.1858986666666667
+            },
+            {
+              "wall": 2.1708333330849805,
+              "cpu": 0.030208333084980648,
+              "gpu": 2.1592746666666667
+            }
+          ],
+          [
+            {
+              "wall": 2.382291667163372,
+              "cpu": 0.037500000248352684,
+              "gpu": 2.3661226666666666
+            },
+            {
+              "wall": 2.3927083338300386,
+              "cpu": 0.03854166716337204,
+              "gpu": 2.37568
+            },
+            {
+              "wall": 2.4708333325882754,
+              "cpu": 0.027083332339922588,
+              "gpu": 2.4576
+            },
+            {
+              "wall": 2.3781249995032945,
+              "cpu": 0.032291666915019356,
+              "gpu": 2.3661226666666666
+            },
+            {
+              "wall": 2.4031250004967055,
+              "cpu": 0.01458333432674408,
+              "gpu": 2.393429333333333
+            },
+            {
+              "wall": 2.3802083333333335,
+              "cpu": 0.04374999925494194,
+              "gpu": 2.3640746666666668
+            },
+            {
+              "wall": 2.3843749997516475,
+              "cpu": 0.041666666666666664,
+              "gpu": 2.366805333333333
+            }
+          ],
+          [
+            {
+              "wall": 2.278124999254942,
+              "cpu": 0.034374999503294625,
+              "gpu": 2.2623573333333336
+            },
+            {
+              "wall": 2.2687499995032945,
+              "cpu": 0.041666666666666664,
+              "gpu": 2.2528
+            },
+            {
+              "wall": 2.285416666418314,
+              "cpu": 0.01979166641831398,
+              "gpu": 2.2719146666666665
+            },
+            {
+              "wall": 2.301041666418314,
+              "cpu": 0.03541666641831398,
+              "gpu": 2.279424
+            },
+            {
+              "wall": 2.2770833323399224,
+              "cpu": 0.024999999751647312,
+              "gpu": 2.2644053333333334
+            },
+            {
+              "wall": 2.2781250004967055,
+              "cpu": 0.03958333283662796,
+              "gpu": 2.2630399999999997
+            },
+            {
+              "wall": 2.265625,
+              "cpu": 0.037500000248352684,
+              "gpu": 2.2480213333333334
+            }
+          ]
+        ],
+        "medians": [
+          {
+            "wall": 2.1812499997516475,
+            "cpu": 0.033333333830038704,
+            "gpu": 2.1654186666666666
+          },
+          {
+            "wall": 2.3843749997516475,
+            "cpu": 0.037500000248352684,
+            "gpu": 2.366805333333333
+          },
+          {
+            "wall": 2.278124999254942,
+            "cpu": 0.03541666641831398,
+            "gpu": 2.2630399999999997
+          }
+        ],
+        "draws": [
+          3,
+          3,
+          3
+        ]
+      },
+      {
+        "name": "Saturn",
+        "samples": [
+          [
+            {
+              "wall": 3.0093749997516475,
+              "cpu": 0.020833333333333332,
+              "gpu": 2.9975893333333334
+            },
+            {
+              "wall": 3.121874999254942,
+              "cpu": 0.04270833358168602,
+              "gpu": 3.0522026666666666
+            },
+            {
+              "wall": 3.0531250002483525,
+              "cpu": 0.041666666666666664,
+              "gpu": 3.037184
+            },
+            {
+              "wall": 3.018750000745058,
+              "cpu": 0.03854166716337204,
+              "gpu": 3.00032
+            },
+            {
+              "wall": 3.2437499997516475,
+              "cpu": 0.04270833358168602,
+              "gpu": 3.1634773333333333
+            },
+            {
+              "wall": 3.0229166659216085,
+              "cpu": 0.027083332339922588,
+              "gpu": 3.008512
+            },
+            {
+              "wall": 3.0072916659216085,
+              "cpu": 0.036458333333333336,
+              "gpu": 2.991445333333333
+            }
+          ],
+          [
+            {
+              "wall": 3.3958333333333335,
+              "cpu": 0.033333333830038704,
+              "gpu": 3.3785173333333334
+            },
+            {
+              "wall": 3.1979166666666665,
+              "cpu": 0.030208333084980648,
+              "gpu": 3.1832746666666663
+            },
+            {
+              "wall": 3.265625,
+              "cpu": 0.040625000993410744,
+              "gpu": 3.1901013333333332
+            },
+            {
+              "wall": 3.2020833330849805,
+              "cpu": 0.038541665921608605,
+              "gpu": 3.1832746666666663
+            },
+            {
+              "wall": 3.2052083338300386,
+              "cpu": 0.03541666641831398,
+              "gpu": 3.1860053333333336
+            },
+            {
+              "wall": 3.3104166661699614,
+              "cpu": 0.038541665921608605,
+              "gpu": 3.229013333333333
+            },
+            {
+              "wall": 3.2197916669150195,
+              "cpu": 0.02395833283662796,
+              "gpu": 3.207168
+            }
+          ],
+          [
+            {
+              "wall": 3.301041666418314,
+              "cpu": 0.034374999503294625,
+              "gpu": 3.2774826666666663
+            },
+            {
+              "wall": 3.319791667163372,
+              "cpu": 0.026041666666666668,
+              "gpu": 3.3061546666666666
+            },
+            {
+              "wall": 3.28125,
+              "cpu": 0.03854166716337204,
+              "gpu": 3.2590506666666665
+            },
+            {
+              "wall": 3.356249999254942,
+              "cpu": 0.034374999503294625,
+              "gpu": 3.2706560000000002
+            },
+            {
+              "wall": 3.3333333333333335,
+              "cpu": 0.03437500074505806,
+              "gpu": 3.312981333333333
+            },
+            {
+              "wall": 3.273958332836628,
+              "cpu": 0.02291666716337204,
+              "gpu": 3.2617813333333334
+            },
+            {
+              "wall": 3.351041667163372,
+              "cpu": 0.033333333830038704,
+              "gpu": 3.2733866666666667
+            }
+          ]
+        ],
+        "medians": [
+          {
+            "wall": 3.0229166659216085,
+            "cpu": 0.03854166716337204,
+            "gpu": 3.008512
+          },
+          {
+            "wall": 3.2197916669150195,
+            "cpu": 0.03541666641831398,
+            "gpu": 3.1901013333333332
+          },
+          {
+            "wall": 3.319791667163372,
+            "cpu": 0.034374999503294625,
+            "gpu": 3.2733866666666667
+          }
+        ],
+        "draws": [
+          4,
+          4,
+          4
+        ]
+      },
+      {
+        "name": "Galactic centre background",
+        "samples": [
+          [
+            {
+              "wall": 1.6968749997516472,
+              "cpu": 0.024999999751647312,
+              "gpu": 1.6820906666666666
+            },
+            {
+              "wall": 1.6958333340783913,
+              "cpu": 0.040624999751647316,
+              "gpu": 1.6807253333333334
+            },
+            {
+              "wall": 1.7406249990065892,
+              "cpu": 0.03229166567325592,
+              "gpu": 1.7250986666666668
+            },
+            {
+              "wall": 1.7312500004967053,
+              "cpu": 0.039583334078391395,
+              "gpu": 1.7134933333333333
+            },
+            {
+              "wall": 1.6937500002483528,
+              "cpu": 0.041666666666666664,
+              "gpu": 1.675264
+            },
+            {
+              "wall": 1.684374999254942,
+              "cpu": 0.029166666169961292,
+              "gpu": 1.667072
+            },
+            {
+              "wall": 1.680208332836628,
+              "cpu": 0.027083332339922588,
+              "gpu": 1.667072
+            }
+          ],
+          [
+            {
+              "wall": 1.936458334326744,
+              "cpu": 0.046875,
+              "gpu": 1.9162453333333334
+            },
+            {
+              "wall": 1.9197916661699612,
+              "cpu": 0.037500000248352684,
+              "gpu": 1.9032746666666667
+            },
+            {
+              "wall": 2.078125,
+              "cpu": 0.01145833358168602,
+              "gpu": 2.0691626666666667
+            },
+            {
+              "wall": 1.9385416669150193,
+              "cpu": 0.037500000248352684,
+              "gpu": 1.9230720000000001
+            },
+            {
+              "wall": 1.9500000004967053,
+              "cpu": 0.033333333830038704,
+              "gpu": 1.933312
+            },
+            {
+              "wall": 1.929166667163372,
+              "cpu": 0.028125000496705372,
+              "gpu": 1.9162453333333334
+            },
+            {
+              "wall": 1.9541666669150193,
+              "cpu": 0.028125000496705372,
+              "gpu": 1.9428693333333333
+            }
+          ],
+          [
+            {
+              "wall": 2.086458332836628,
+              "cpu": 0.038541665921608605,
+              "gpu": 2.0677973333333335
+            },
+            {
+              "wall": 2.0593750004967055,
+              "cpu": 0.02395833283662796,
+              "gpu": 2.0445866666666666
+            },
+            {
+              "wall": 2.0593750004967055,
+              "cpu": 0.040624999751647316,
+              "gpu": 2.041856
+            },
+            {
+              "wall": 2.0656249995032945,
+              "cpu": 0.03229166567325592,
+              "gpu": 2.0398080000000003
+            },
+            {
+              "wall": 2.086458332836628,
+              "cpu": 0.036458333333333336,
+              "gpu": 2.0664320000000003
+            },
+            {
+              "wall": 2.0531250002483525,
+              "cpu": 0.030208333084980648,
+              "gpu": 2.0398080000000003
+            },
+            {
+              "wall": 2.0593750004967055,
+              "cpu": 0.036458333333333336,
+              "gpu": 2.0384426666666666
+            }
+          ]
+        ],
+        "medians": [
+          {
+            "wall": 1.6958333340783913,
+            "gpu": 1.6807253333333334
+          },
+          {
+            "wall": 1.9385416669150193,
+            "gpu": 1.9230720000000001
+          },
+          {
+            "wall": 2.0593750004967055,
+            "gpu": 2.041856
+          }
+        ]
+      }
+    ],
+    "errors": []
+  },
+  "gpuChecks": [
+    {
+      "page": "sky-verify.html",
+      "summary": "14 passed, 0 failed.",
+      "checks": [
+        "PASS \u2014 Sky Galactic centre and poles agree with published ICRS directions",
+        "PASS \u2014 Sky maps Galactic longitude zero to the panorama centre",
+        "PASS \u2014 Milky Way is continuous across the longitude wrap",
+        "PASS \u2014 Sky poles remain finite and continuous at every longitude",
+        "PASS \u2014 All sampled sky directions have finite, nonnegative radiance",
+        "PASS \u2014 The Galactic plane is brighter than the high-latitude sky (0.0187 vs 0.0005 HDR)",
+        "PASS \u2014 The central stellar clouds are brighter than the anticentre",
+        "PASS \u2014 GPU sky sampling matches independent Gaia panorama samples (max HDR error 1.4e-5)",
+        "PASS \u2014 A fixed sky direction ignores camera position/basis and simulation clocks",
+        "PASS \u2014 Low-resolution star filtering stays finite and bounded",
+        "PASS \u2014 Opaque foreground bodies completely occlude the new sky",
+        "PASS \u2014 The improved sky adds no frame draws or compute dispatches",
+        "PASS \u2014 Sky shaders and commands validate",
+        "PASS \u2014 No uncaptured GPU errors"
+      ],
+      "errors": []
+    },
+    {
+      "page": "verify.html",
+      "summary": "40 passed, 0 failed.",
+      "checks": [
+        "PASS \u2014 Animated Sun and aureole use only scene and composite draws",
+        "PASS \u2014 Solar surface evolves with a fixed body rotation and camera (mean HDR change 0.0127)",
+        "PASS \u2014 Paused solar pixels remain identical as real time advances",
+        "PASS \u2014 Reversing the activity clock returns to the original solar pixels",
+        "PASS \u2014 Sun retains the original's displayed texture contrast (0.099 \u2192 0.112)",
+        "PASS \u2014 Sun retains the original's warm colour separation (0.795 \u2192 0.808)",
+        "PASS \u2014 Sun does not wash out more surface into white (2.52% \u2192 2.77%)",
+        "PASS \u2014 Foreground planets suppress the bright disc and solar aureole",
+        "PASS \u2014 Texture dimensions and full mip chain match the selected profile (2048 \u00d7 1024, 12 levels)",
+        "PASS \u2014 Every texture layer has a populated final 1 \u00d7 1 mip",
+        "PASS \u2014 Production LOD follows texture width and clamps to its final mip",
+        "PASS \u2014 Atmosphere shell intervals agree with independent ray/sphere geometry (max error 1.4e-7 radii)",
+        "PASS \u2014 Sun optical depths agree with independent 4096-slice integration (78 horizon/altitude cases; max error 1.70%)",
+        "PASS \u2014 View attenuation follows Beer\u2013Lambert across surface and limb rays (max absolute transmission error 0.0078)",
+        "PASS \u2014 Surface atmospheric lighting tolerates distant-hit precision error",
+        "PASS \u2014 Airless bodies and foreground opaque depth produce no atmosphere",
+        "PASS \u2014 Half-lit atmosphere follows the Sun and suppresses the dark limb",
+        "PASS \u2014 An unlit surface gains no emissive atmospheric rim",
+        "PASS \u2014 An eclipsing body suppresses atmospheric in-scattering",
+        "PASS \u2014 Atmosphere toggle restores the input radiance exactly",
+        "PASS \u2014 Foreground ring opacity attenuates the atmosphere behind it (alpha 0.404, composition error 9.9e-9)",
+        "PASS \u2014 Optimized bloom preserves Gaussian shape, energy and edge clamping (6 texture sizes, max HDR error 2.4e-4)",
+        "PASS \u2014 Textured surface receives direct sunlight (linear luminance 0.4091)",
+        "PASS \u2014 An intervening Moon casts a shadow (0.4091 \u2192 0.0010)",
+        "PASS \u2014 Moving the occluder restores sunlight",
+        "PASS \u2014 A missed sphere reveals the background",
+        "PASS \u2014 A larger apparent Moon produces totality",
+        "PASS \u2014 A smaller aligned Moon leaves an annular eclipse (visible fraction 0.7506)",
+        "PASS \u2014 Penumbra changes continuously from umbra to full light (7 partial-shadow positions)",
+        "PASS \u2014 Analytic penumbra agrees with independent solar-disc integration (maximum error 0.0009)",
+        "PASS \u2014 A more distant blocker covers less of the finite Sun",
+        "PASS \u2014 Increasing the Sun's radius changes eclipse coverage",
+        "PASS \u2014 Bodies behind the receiver or beyond the Sun do not shadow it",
+        "PASS \u2014 Overlapping blockers do not count the same shadow twice",
+        "PASS \u2014 Multiple blockers integrate the union of their silhouettes (0.7500 vs reference 0.7211)",
+        "PASS \u2014 Steady frames reuse targets, uniforms and body buffers",
+        "PASS \u2014 Bloom off skips all compute dispatches",
+        "PASS \u2014 Resolution changes rebuild targets exactly once",
+        "PASS \u2014 Bloom uses three dispatches and two render draws",
+        "PASS \u2014 All production shaders and GPU commands validate"
+      ],
+      "errors": []
+    },
+    {
+      "page": "orbits-verify.html",
+      "summary": "14 passed, 0 failed.",
+      "checks": [
+        "PASS \u2014 Low-angle and coplanar views have no detached background trails (0 pixels outside the independent ellipse envelope)",
+        "PASS \u2014 Near-plane crossings and planet-scale close-ups retain bounded paths",
+        "PASS \u2014 Every planet retains its actual orbit in its default close-up (294, 290, 259, 300, 298, 446, 296, 286 lit path pixels)",
+        "PASS \u2014 Orbits entirely behind the camera emit no pixels",
+        "PASS \u2014 Orbit brightness trails the body and reverses with time",
+        "PASS \u2014 Thin stroke width is independent of trail brightness, zoom and inclination (raster half-maximum widths 1.25, 1.25, 1.00, 1.00, 1.00, 1.13, 1.50, 1.50 pixels)",
+        "PASS \u2014 Moon annotations remain hollow screen-space circles",
+        "PASS \u2014 Circle CSS size survives zoom and resolution changes",
+        "PASS \u2014 Foreground rings attenuate circles with actual texture alpha (1.390 \u2192 0.863)",
+        "PASS \u2014 Opaque foreground bodies hide circles",
+        "PASS \u2014 Orbit toggle removes lines while keeping entity circles",
+        "PASS \u2014 Camera motion opacity hides circle annotations",
+        "PASS \u2014 Inactive local LOD emits neither paths nor circles",
+        "PASS \u2014 Production batching validates, reuses resources and stays below ten draws (4 draws with paths + moons; 2 with both hidden)"
+      ],
+      "errors": []
+    }
+  ],
+  "oneKChecks": {
+    "summary": "14 passed, 0 failed.",
+    "checks": [
+      "PASS \u2014 Sky Galactic centre and poles agree with published ICRS directions",
+      "PASS \u2014 Sky maps Galactic longitude zero to the panorama centre",
+      "PASS \u2014 Milky Way is continuous across the longitude wrap",
+      "PASS \u2014 Sky poles remain finite and continuous at every longitude",
+      "PASS \u2014 All sampled sky directions have finite, nonnegative radiance",
+      "PASS \u2014 The Galactic plane is brighter than the high-latitude sky (0.0194 vs 0.0005 HDR)",
+      "PASS \u2014 The central stellar clouds are brighter than the anticentre",
+      "PASS \u2014 GPU sky sampling matches independent Gaia panorama samples (max HDR error 1.3e-5)",
+      "PASS \u2014 A fixed sky direction ignores camera position/basis and simulation clocks",
+      "PASS \u2014 Low-resolution star filtering stays finite and bounded",
+      "PASS \u2014 Opaque foreground bodies completely occlude the new sky",
+      "PASS \u2014 The improved sky adds no frame draws or compute dispatches",
+      "PASS \u2014 Sky shaders and commands validate",
+      "PASS \u2014 No uncaptured GPU errors"
+    ],
+    "errors": []
+  },
+  "uiChecks": {
+    "results": [
+      {
+        "name": "Sun",
+        "draws": "3",
+        "dispatches": "3",
+        "errors": "0",
+        "frame": "16.7 ms",
+        "cpu": "0.28 ms"
+      },
+      {
+        "name": "Earth",
+        "draws": "3",
+        "dispatches": "3",
+        "errors": "0",
+        "frame": "16.7 ms",
+        "cpu": "0.27 ms"
+      },
+      {
+        "name": "Saturn",
+        "draws": "4",
+        "dispatches": "3",
+        "errors": "0",
+        "frame": "16.7 ms",
+        "cpu": "0.34 ms"
+      },
+      {
+        "name": "Saturn paths/bloom off",
+        "draws": "3",
+        "dispatches": "0",
+        "errors": "0"
+      },
+      {
+        "name": "Balanced resolution",
+        "resolution": "1280 \u00d7 900",
+        "errors": "0"
+      },
+      {
+        "name": "390\u00d7844 Earth",
+        "errors": "0",
+        "draws": "3",
+        "resolution": "390 \u00d7 314",
+        "visibleSatellites": 0,
+        "planetFont": "10px ui-monospace, SFMono-Regular, Consolas, monospace",
+        "satelliteFont": "10px ui-monospace, SFMono-Regular, Consolas, monospace"
+      }
+    ],
+    "errors": []
+  },
+  "benchmarkChecks": {
+    "benchmark": {
+      "text": "641 \u00d7 359 \u00b7 metal-3 \u00b7 2048px maps\nBloom off, atmospheres on\nMozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36\nLow-angle system:\n  Completion 0.271 ms/frame (batch range 0.258\u20130.342)\n  CPU encode/submit 0.008 ms/frame\n  GPU batch average 0.262 ms/frame \u00b7 3 draws\nSun close-up:\n  Completion 0.292 ms/frame (batch range 0.277\u20130.350)\n  CPU encode/submit 0.008 ms/frame\n  GPU batch average 0.283 ms/frame \u00b7 3 draws\nEarth close-up:\n  Completion 0.308 ms/frame (batch range 0.294\u20130.335)\n  CPU encode/submit 0.006 ms/frame\n  GPU batch average 0.299 ms/frame \u00b7 3 draws\nSaturn close-up:\n  Completion 0.569 ms/frame (batch range 0.552\u20130.592)\n  CPU encode/submit 0.008 ms/frame\n  GPU batch average 0.556 ms/frame \u00b7 4 draws",
+      "data": {
+        "environment": {
+          "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36",
+          "adapter": "metal-3",
+          "width": 641,
+          "height": 359,
+          "maps": 2048,
+          "bloom": false,
+          "atmospheres": true,
+          "frames": 48,
+          "batches": 7,
+          "timestampQueries": true
+        },
+        "results": [
+          {
+            "name": "Low-angle system",
+            "wall": 0.2708333333333333,
+            "cpu": 0.00833333283662796,
+            "gpu": 0.262144,
+            "draws": 3,
+            "samples": [
+              {
+                "cpu": 0.012499998013178507,
+                "wall": 0.3416666661699613,
+                "gpu": 0.31266133333333335
+              },
+              {
+                "cpu": 0.00833333283662796,
+                "wall": 0.2604166666666667,
+                "gpu": 0.24576
+              },
+              {
+                "cpu": 0.008333335320154825,
+                "wall": 0.25833333532015484,
+                "gpu": 0.24712533333333334
+              },
+              {
+                "cpu": 0.0062499990065892535,
+                "wall": 0.28333333134651184,
+                "gpu": 0.27716266666666667
+              },
+              {
+                "cpu": 0.006250001490116119,
+                "wall": 0.2708333333333333,
+                "gpu": 0.262144
+              },
+              {
+                "cpu": 0.00833333283662796,
+                "wall": 0.28541666517655057,
+                "gpu": 0.27716266666666667
+              },
+              {
+                "cpu": 0.006250001490116119,
+                "wall": 0.25833333283662796,
+                "gpu": 0.24576
+              }
+            ]
+          },
+          {
+            "name": "Sun close-up",
+            "wall": 0.2916666666666667,
+            "cpu": 0.00833333283662796,
+            "gpu": 0.282624,
+            "draws": 3,
+            "samples": [
+              {
+                "cpu": 0.008333335320154825,
+                "wall": 0.31041666865348816,
+                "gpu": 0.29764266666666667
+              },
+              {
+                "cpu": 0.00833333283662796,
+                "wall": 0.34999999900658924,
+                "gpu": 0.335872
+              },
+              {
+                "cpu": 0.006250001490116119,
+                "wall": 0.30416666716337204,
+                "gpu": 0.29627733333333334
+              },
+              {
+                "cpu": 0.008333335320154825,
+                "wall": 0.2916666666666667,
+                "gpu": 0.282624
+              },
+              {
+                "cpu": 0.00833333283662796,
+                "wall": 0.2833333338300387,
+                "gpu": 0.2676053333333333
+              },
+              {
+                "cpu": 0.00833333283662796,
+                "wall": 0.28125,
+                "gpu": 0.26897066666666664
+              },
+              {
+                "cpu": 0.0062499990065892535,
+                "wall": 0.2770833323399226,
+                "gpu": 0.2676053333333333
+              }
+            ]
+          },
+          {
+            "name": "Earth close-up",
+            "wall": 0.3083333323399226,
+            "cpu": 0.0062499990065892535,
+            "gpu": 0.299008,
+            "draws": 3,
+            "samples": [
+              {
+                "cpu": 0.0062499990065892535,
+                "wall": 0.33541666716337204,
+                "gpu": 0.31266133333333335
+              },
+              {
+                "cpu": 0.0062499990065892535,
+                "wall": 0.3229166666666667,
+                "gpu": 0.3140266666666667
+              },
+              {
+                "cpu": 0.0062499990065892535,
+                "wall": 0.3083333323399226,
+                "gpu": 0.299008
+              },
+              {
+                "cpu": 0.0062499990065892535,
+                "wall": 0.3020833333333333,
+                "gpu": 0.28672000000000003
+              },
+              {
+                "cpu": 0.0062499990065892535,
+                "wall": 0.29375000049670535,
+                "gpu": 0.2839893333333333
+              },
+              {
+                "cpu": 0.00833333283662796,
+                "wall": 0.2958333318432172,
+                "gpu": 0.2853546666666667
+              },
+              {
+                "cpu": 0.0062499990065892535,
+                "wall": 0.3249999980131785,
+                "gpu": 0.3140266666666667
+              }
+            ]
+          },
+          {
+            "name": "Saturn close-up",
+            "wall": 0.5687499990065893,
+            "cpu": 0.00833333283662796,
+            "gpu": 0.5556906666666667,
+            "draws": 4,
+            "samples": [
+              {
+                "cpu": 0.0062499990065892535,
+                "wall": 0.5916666661699613,
+                "gpu": 0.5775359999999999
+              },
+              {
+                "cpu": 0.008333335320154825,
+                "wall": 0.5833333333333334,
+                "gpu": 0.5707093333333334
+              },
+              {
+                "cpu": 0.0062499990065892535,
+                "wall": 0.5520833333333334,
+                "gpu": 0.5420373333333334
+              },
+              {
+                "cpu": 0.006250001490116119,
+                "wall": 0.5708333353201548,
+                "gpu": 0.561152
+              },
+              {
+                "cpu": 0.010416666666666666,
+                "wall": 0.5687499990065893,
+                "gpu": 0.5556906666666667
+              },
+              {
+                "cpu": 0.008333335320154825,
+                "wall": 0.5583333348234495,
+                "gpu": 0.5420373333333334
+              },
+              {
+                "cpu": 0.00833333283662796,
+                "wall": 0.5645833338300387,
+                "gpu": 0.55296
+              }
+            ]
+          }
+        ]
+      },
+      "errors": []
+    },
+    "noTiming": {
+      "text": "321 \u00d7 181 \u00b7 metal-3 \u00b7 2048px maps\nBloom on, atmospheres on\nMozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36\nLow-angle system:\n  Completion 0.227 ms/frame (batch range 0.200\u20130.237)\n  CPU encode/submit 0.008 ms/frame\n  GPU batch average timestamps unavailable \u00b7 3 draws\nSun close-up:\n  Completion 0.190 ms/frame (batch range 0.183\u20130.210)\n  CPU encode/submit 0.008 ms/frame\n  GPU batch average timestamps unavailable \u00b7 3 draws\nEarth close-up:\n  Completion 0.198 ms/frame (batch range 0.179\u20130.206)\n  CPU encode/submit 0.008 ms/frame\n  GPU batch average timestamps unavailable \u00b7 3 draws\nSaturn close-up:\n  Completion 0.240 ms/frame (batch range 0.231\u20130.262)\n  CPU encode/submit 0.008 ms/frame\n  GPU batch average timestamps unavailable \u00b7 4 draws",
+      "data": {
+        "environment": {
+          "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36",
+          "adapter": "metal-3",
+          "width": 321,
+          "height": 181,
+          "maps": 2048,
+          "bloom": true,
+          "atmospheres": true,
+          "frames": 48,
+          "batches": 7,
+          "timestampQueries": false
+        },
+        "results": [
+          {
+            "name": "Low-angle system",
+            "wall": 0.22708333532015482,
+            "cpu": 0.00833333283662796,
+            "gpu": null,
+            "draws": 3,
+            "samples": [
+              {
+                "cpu": 0.010416666666666666,
+                "wall": 0.23125000049670538,
+                "gpu": null
+              },
+              {
+                "cpu": 0.00833333283662796,
+                "wall": 0.23749999950329462,
+                "gpu": null
+              },
+              {
+                "cpu": 0.006250001490116119,
+                "wall": 0.20624999950329462,
+                "gpu": null
+              },
+              {
+                "cpu": 0.008333335320154825,
+                "wall": 0.22708333532015482,
+                "gpu": null
+              },
+              {
+                "cpu": 0.0062499990065892535,
+                "wall": 0.1999999980131785,
+                "gpu": null
+              },
+              {
+                "cpu": 0.008333335320154825,
+                "wall": 0.23541666815678278,
+                "gpu": null
+              },
+              {
+                "cpu": 0.0062499990065892535,
+                "wall": 0.2166666661699613,
+                "gpu": null
+              }
+            ]
+          },
+          {
+            "name": "Sun close-up",
+            "wall": 0.1895833338300387,
+            "cpu": 0.00833333283662796,
+            "gpu": null,
+            "draws": 3,
+            "samples": [
+              {
+                "cpu": 0.010416666666666666,
+                "wall": 0.21041666716337204,
+                "gpu": null
+              },
+              {
+                "cpu": 0.00833333283662796,
+                "wall": 0.18333333233992258,
+                "gpu": null
+              },
+              {
+                "cpu": 0.006250001490116119,
+                "wall": 0.1895833338300387,
+                "gpu": null
+              },
+              {
+                "cpu": 0.00833333283662796,
+                "wall": 0.18333333482344946,
+                "gpu": null
+              },
+              {
+                "cpu": 0.00833333283662796,
+                "wall": 0.19791666666666666,
+                "gpu": null
+              },
+              {
+                "cpu": 0.00833333283662796,
+                "wall": 0.1854166661699613,
+                "gpu": null
+              },
+              {
+                "cpu": 0.0062499990065892535,
+                "wall": 0.19166666517655054,
+                "gpu": null
+              }
+            ]
+          },
+          {
+            "name": "Earth close-up",
+            "wall": 0.19791666666666666,
+            "cpu": 0.00833333283662796,
+            "gpu": null,
+            "draws": 3,
+            "samples": [
+              {
+                "cpu": 0.00833333283662796,
+                "wall": 0.20624999950329462,
+                "gpu": null
+              },
+              {
+                "cpu": 0.006250001490116119,
+                "wall": 0.19166666766007742,
+                "gpu": null
+              },
+              {
+                "cpu": 0.0062499990065892535,
+                "wall": 0.20000000049670538,
+                "gpu": null
+              },
+              {
+                "cpu": 0.00833333283662796,
+                "wall": 0.17916666716337204,
+                "gpu": null
+              },
+              {
+                "cpu": 0.00833333283662796,
+                "wall": 0.20624999950329462,
+                "gpu": null
+              },
+              {
+                "cpu": 0.00833333283662796,
+                "wall": 0.19791666666666666,
+                "gpu": null
+              },
+              {
+                "cpu": 0.00833333283662796,
+                "wall": 0.1854166661699613,
+                "gpu": null
+              }
+            ]
+          },
+          {
+            "name": "Saturn close-up",
+            "wall": 0.23958333333333334,
+            "cpu": 0.00833333283662796,
+            "gpu": null,
+            "draws": 4,
+            "samples": [
+              {
+                "cpu": 0.00833333283662796,
+                "wall": 0.2624999980131785,
+                "gpu": null
+              },
+              {
+                "cpu": 0.006250001490116119,
+                "wall": 0.2520833338300387,
+                "gpu": null
+              },
+              {
+                "cpu": 0.00833333283662796,
+                "wall": 0.23958333333333334,
+                "gpu": null
+              },
+              {
+                "cpu": 0.00833333283662796,
+                "wall": 0.23125000049670538,
+                "gpu": null
+              },
+              {
+                "cpu": 0.00833333283662796,
+                "wall": 0.23958333333333334,
+                "gpu": null
+              },
+              {
+                "cpu": 0.00833333283662796,
+                "wall": 0.2520833338300387,
+                "gpu": null
+              },
+              {
+                "cpu": 0.00833333283662796,
+                "wall": 0.23958333333333334,
+                "gpu": null
+              }
+            ]
+          }
+        ]
+      },
+      "errors": []
+    }
+  },
+  "cpuTests": {
+    "command": "bun test tests/textures.test.js",
+    "passed": 8,
+    "failed": 0,
+    "assertions": 35
+  },
+  "discardedTimestampExample": {
+    "description": "Early prototype: summed per-frame GPU ranges overcount the two-draw background fixture. Not used in final measurements.",
+    "skyOnlyTextureVariant": {
+      "wall": 2.0062499990065894,
+      "gpu": 24.38894933333332
+    }
+  }
+}

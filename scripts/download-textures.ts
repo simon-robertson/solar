@@ -6,14 +6,18 @@ const names = [
   "2k_saturn_ring_alpha.png",
 ];
 const origin = "https://www.solarsystemscope.com/textures/download/";
+const resources = names.map(name => ({ name, url: origin+name })).concat({
+  name: "gaia-early-dr3-sky.png",
+  url: "https://media.esa.int/legacy/web/images/esa_multimedia/images/2020/12/interactive_map_of_the_sky_from_gaia_s_early_data_release_3/25364650-1-eng-GB/Interactive_map_of_the_sky_from_Gaia_s_Early_Data_Release_3.png",
+});
 // Bound concurrency to avoid overwhelming the source. Cache existing downloads.
 let cursor = 0;
 async function worker() {
-  while (cursor < names.length) {
-    const name = names[cursor++];
+  while (cursor < resources.length) {
+    const { name, url } = resources[cursor++];
     const file = Bun.file(new URL(`../docs/assets/textures/${name}`, import.meta.url));
     if (await file.exists() && file.size > 1024) { console.log(`Cached ${name}`); continue; }
-    const response = await fetch(origin + name, { signal: AbortSignal.timeout(60000) });
+    const response = await fetch(url, { signal: AbortSignal.timeout(60000) });
     if (!response.ok || !response.headers.get("content-type")?.startsWith("image/")) {
       throw new Error(`${name}: HTTP ${response.status}, expected an image`);
     }

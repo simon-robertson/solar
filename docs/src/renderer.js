@@ -1,6 +1,6 @@
 import { BODIES } from "./data.js";
-import { OrbitDetails, ORBIT_COUNT, ORBIT_SEGMENTS } from "./orbit-details.js";
-import { allocatePlanetTextures, MAP_LAYERS } from "./textures.js";
+import { OrbitDetails, ORBIT_COUNT, ORBIT_SEGMENTS, PLANET_ORBITS, SATURN_MOONS } from "./orbit-details.js";
+import { allocatePlanetTextures, MAP_LAYERS, SKY_TEXTURE } from "./textures.js";
 
 const shaderURL = name => new URL(`./${name}.wgsl`, import.meta.url);
 
@@ -27,7 +27,7 @@ export class Renderer {
   constructor(canvas, onError) {
     this.canvas = canvas;
     this.onError = onError;
-    this.uniforms = new Float32Array(24);
+    this.uniforms = new Float32Array(28);
     this.orbitDetails = new OrbitDetails();
     this.markerOpacity = 1;
     this.prepareAnnotations = null;
@@ -49,11 +49,14 @@ export class Renderer {
     this.computeDescriptor = { label: "Bloom" };
   }
 
-  async init(bodyData, progress) {
+  async init(bodyData, progress, { timestampQueries = false } = {}) {
     if (!navigator.gpu) throw new Error("This browser does not expose WebGPU. Open this page in a current desktop Chrome, Edge or Safari with WebGPU enabled.");
     const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
     if (!adapter) throw new Error("A WebGPU adapter could not be found. Try a browser with WebGPU support and hardware acceleration enabled.");
-    this.device = await adapter.requestDevice();
+    // Timing is opt-in for the standalone benchmark. The explorer requests no
+    // optional features, and timing remains optional on unsupported adapters.
+    const requiredFeatures = timestampQueries && adapter.features.has("timestamp-query") ? ["timestamp-query"] : [];
+    this.device = await adapter.requestDevice({ requiredFeatures });
     const device = this.device;
     device.addEventListener("uncapturederror", event => { if (!this.disposed) this.onError(event.error.message); });
     device.lost.then(info => { if (!this.disposed) this.onError(`Graphics device lost: ${info.message || info.reason}. Reload to reconnect.`); });
@@ -62,7 +65,7 @@ export class Renderer {
     if (!this.context) throw new Error("Could not create a WebGPU canvas context.");
     this.format = navigator.gpu.getPreferredCanvasFormat();
     this.context.configure({ device, format: this.format, alphaMode: "opaque" });
-    this.uniformBuffer = device.createBuffer({ label: "Reusable camera", size: 96, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.uniformBuffer = device.createBuffer({ label: "Reusable camera", size: this.uniforms.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.bodyBuffer = device.createBuffer({ label: "Reusable body state", size: bodyData.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.orbitBuffer = device.createBuffer({ label: "Reusable orbital detail state", size: this.orbitDetails.data.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     // Reuse one unit circle for every path. No per-frame meshes or GPU trig.
@@ -107,7 +110,7 @@ export class Renderer {
     this.orbitPipeline = orbitPipeline; this.markerPipeline = markerPipeline;
     this.extractPipeline = extract; this.blurXPipeline = blurX; this.blurYPipeline = blurY;
     const textures = await allocatePlanetTextures(device,async ({ maps, ring, width, height, ringWidth, ringHeight, mipLevelCount }) => {
-      const filenames = BODIES.map(body => body.texture).concat("2k_earth_nightmap.jpg","2k_earth_clouds.jpg");
+      const filenames = BODIES.map(body => body.texture).concat("2k_earth_nightmap.jpg","2k_earth_clouds.jpg",SKY_TEXTURE);
       // Decode two images at a time and release each bitmap immediately after upload.
       for (let start = 0; start < MAP_LAYERS; start += 2) {
         const uploads = await Promise.allSettled(filenames.slice(start,start+2).map(async (name,offset) => {
@@ -164,7 +167,11 @@ export class Renderer {
     this.bloomA = device.createTexture({ label: "Bloom A", size: [this.bw,this.bh], format: "rgba16float", usage: bloomUsage });
     this.bloomB = device.createTexture({ label: "Bloom B", size: [this.bw,this.bh], format: "rgba16float", usage: bloomUsage });
     const sceneView = this.sceneTexture.createView(), a = this.bloomA.createView(), b = this.bloomB.createView();
-    const bind = (pipeline,input,output) => device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: input },{ binding: 1, resource: output }] });
+    const bind = (pipeline,input,output) => {
+      const entries = [{ binding: 0, resource: input },{ binding: 1, resource: output }];
+      if (pipeline!==this.extractPipeline) entries.push({ binding: 2, resource: this.linearSampler });
+      return device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries });
+    };
     this.extractBind = bind(this.extractPipeline,sceneView,a);
     this.blurXBind = bind(this.blurXPipeline,a,b);
     this.blurYBind = bind(this.blurYPipeline,b,a);
@@ -188,20 +195,22 @@ export class Renderer {
     u[20] = this.bloom ? 0.325 : 0; u[21] = this.atmospheres ? 1 : 0;
     u[22] = this.width/Math.max(1,this.cssWidth);
     u[23] = this.orbitDetails.saturnLod.opacity>0 ? this.markerOpacity : 0;
+    u[24] = simulation.solarSeconds;
     const device = this.device;
     device.queue.writeBuffer(this.uniformBuffer,0,u);
     device.queue.writeBuffer(this.bodyBuffer,0,simulation.data);
-    device.queue.writeBuffer(this.orbitBuffer,0,this.orbitDetails.data);
+    if (this.orbits || u[23]>0) device.queue.writeBuffer(this.orbitBuffer,0,this.orbitDetails.data);
     const encoder = device.createCommandEncoder(this.encoderDescriptor);
     const scene = encoder.beginRenderPass(this.scenePass);
     scene.setPipeline(this.scenePipeline); scene.setBindGroup(0,this.sceneBind); scene.draw(3);
     this.drawCalls = 2; // Scene + final composite, plus optional batched details.
     if (this.orbits) {
-      scene.setPipeline(this.orbitPipeline); scene.draw(ORBIT_SEGMENTS*6,ORBIT_COUNT);
+      const count = this.orbitDetails.saturnLod.opacity>0 ? ORBIT_COUNT : PLANET_ORBITS;
+      scene.setPipeline(this.orbitPipeline); scene.draw(ORBIT_SEGMENTS*6,count);
       this.drawCalls++;
     }
     if (u[23]>0) {
-      scene.setPipeline(this.markerPipeline); scene.draw(6,ORBIT_COUNT);
+      scene.setPipeline(this.markerPipeline); scene.draw(6,SATURN_MOONS.length,0,PLANET_ORBITS);
       this.drawCalls++;
     }
     scene.end();

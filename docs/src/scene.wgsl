@@ -5,6 +5,7 @@ struct Camera {
   forward: vec4f,   // basis, exposure
   viewport: vec4f,  // width, height, selected body, orbit visibility
   effects: vec4f,   // bloom strength, atmosphere visibility, render/CSS ratio, annotation opacity
+  solar: vec4f,     // signed surface-animation seconds, reserved
 }
 struct Body {
   sphere: vec4f,
@@ -26,6 +27,7 @@ struct Orbit {
 @group(0) @binding(2) var maps: texture_2d_array<f32>;
 @group(0) @binding(3) var mapSampler: sampler;
 @group(0) @binding(4) var ringMap: texture_2d<f32>;
+
 
 const PI = 3.14159265359;
 const TAU = 6.28318530718;
@@ -107,6 +109,53 @@ fn textureLOD(t: f32, radius: f32, facing: f32) -> f32 {
   return clamp(log2(max(footprint, 1.0)), 0.0, f32(textureNumLevels(maps)-1u));
 }
 
+// Seamless fields in the rotating solar frame. Neither poles nor the map's UV
+// seam are privileged; no geometry displacement changes eclipse silhouettes.
+fn solarLocal(n: vec3f) -> vec3f {
+  let tilt = bodies[0].material.y;
+  let p = vec3f(n.x,cos(tilt)*n.y+sin(tilt)*n.z,-sin(tilt)*n.y+cos(tilt)*n.z);
+  let a = bodies[0].material.x;
+  return vec3f(cos(a)*p.x-sin(a)*p.z,p.y,sin(a)*p.x+cos(a)*p.z);
+}
+fn solarHash(p: vec3f) -> f32 {
+  var q = fract(p*0.1031);
+  q += dot(q,q.yzx+33.33);
+  return fract((q.x+q.y)*q.z);
+}
+fn solarNoise(p: vec3f) -> f32 {
+  let i = floor(p);
+  let f = fract(p);
+  let u = f*f*(3.0-2.0*f);
+  return mix(mix(mix(solarHash(i),solarHash(i+vec3f(1,0,0)),u.x),
+                 mix(solarHash(i+vec3f(0,1,0)),solarHash(i+vec3f(1,1,0)),u.x),u.y),
+             mix(mix(solarHash(i+vec3f(0,0,1)),solarHash(i+vec3f(1,0,1)),u.x),
+                 mix(solarHash(i+vec3f(0,1,1)),solarHash(i+vec3f(1,1,1)),u.x),u.y),u.z);
+}
+fn solarSurface(normal: vec3f, facing: f32, t: f32, lod: f32) -> vec3f {
+  let n = solarLocal(normal);
+  let time = camera.solar.x;
+  let footprint = 2.0*t*camera.eye.w/(camera.viewport.y*bodies[0].sphere.w*max(facing,.12));
+  let detail = 1.0-smoothstep(.025,.08,footprint);
+  // Preserve the original map's colour and broad structure. A bounded,
+  // material-space flow deforms it locally instead of sliding an overlay.
+  let drift = vec3f(time*.032,-time*.021,time*.017);
+  let flow = vec3f(solarNoise(n*7.0+drift),solarNoise(n*7.0-drift+19.0),solarNoise(n*7.0+drift+37.0))-.5;
+  let warp = .018*detail*(1.0-smoothstep(.88,.99,abs(n.y)));
+  let p = normalize(n+flow*warp);
+  let uv = vec2f(atan2(p.z,p.x)/TAU+.5,acos(clamp(p.y,-1.0,1.0))/PI);
+  let albedo = textureSampleLevel(maps,mapSampler,uv,0,lod).rgb;
+  var fine = 1.0;
+  let fineLod = 1.0-smoothstep(.002,.009,footprint);
+  if (fineLod>0.0) {
+    fine += (solarNoise(n*110.0+flow*2.0+drift*.4)-.5)*.22*fineLod;
+  }
+  let evolution = 1.0+.10*detail*(solarNoise(n*23.0+flow+drift*.7)-.5);
+  // Original emission/limb curve, with a small contrast adjustment that keeps
+  // darker structures and hot highlights distinct after the shared tone map.
+  let limb = .5+.5*pow(max(facing,0.0),.35);
+  return pow(albedo,vec3f(1.06))*vec3f(5.4,3.65,2.55)*limb*fine*evolution;
+}
+
 fn ringUV(point: vec3f) -> f32 {
   return (length(point - bodies[6].sphere.xyz) / bodies[6].sphere.w - 1.23) / (2.32 - 1.23);
 }
@@ -143,26 +192,26 @@ fn sunVisibility(point: vec3f, normal: vec3f, selfIndex: u32, includeRings: bool
   let light = lightVector / lightDistance;
   let sunSin = clamp(bodies[0].sphere.w / lightDistance, 0.000001, 0.999999);
   let sunCos = sqrt(1.0-sunSin*sunSin);
-  let sunAngle = asin(sunSin);
   var blockers = 0u;
   var blockerCount = 0u;
   var analytic = 1.0;
   for (var j = 1u; j < arrayLength(&bodies); j++) {
     if (j == selfIndex) { continue; }
     let toBlocker = bodies[j].sphere.xyz-start;
-    let distance = length(toBlocker);
     let radius = bodies[j].sphere.w;
-    if (distance <= radius) { return 0.0; }
+    let distanceSquared = dot(toBlocker,toBlocker);
+    if (distanceSquared <= radius*radius) { return 0.0; }
     // Bodies behind the receiver or beyond the Sun cannot eclipse it.
-    if (dot(toBlocker,light) <= 0.0 || distance >= lightDistance) { continue; }
-    let direction = toBlocker/distance;
-    let blockerSin = clamp(radius/distance, 0.0, 1.0);
+    if (dot(toBlocker,light) <= 0.0 || distanceSquared >= lightDistance*lightDistance) { continue; }
+    let inverseDistance = inverseSqrt(distanceSquared);
+    let direction = toBlocker*inverseDistance;
+    let blockerSin = clamp(radius*inverseDistance, 0.0, 1.0);
     let blockerCos = sqrt(1.0-blockerSin*blockerSin);
     let alignment = dot(light,direction);
     // Cone rejection avoids inverse trig for almost all bodies at most pixels.
     if (alignment <= sunCos*blockerCos-sunSin*blockerSin) { continue; }
     let separation = atan2(length(cross(light,direction)),alignment);
-    let fraction = discVisibility(sunAngle,asin(blockerSin),separation);
+    let fraction = discVisibility(asin(sunSin),asin(blockerSin),separation);
     if (fraction <= 0.0) { return 0.0; }
     analytic = fraction;
     blockers |= 1u << j;
@@ -217,21 +266,69 @@ fn sunVisibility(point: vec3f, normal: vec3f, selfIndex: u32, includeRings: bool
   return transmission/32.0;
 }
 
-fn hash(p: vec3f) -> f32 {
-  return fract(sin(dot(p, vec3f(127.1,311.7,74.7))) * 43758.5453);
+fn starRandom(p: vec3f) -> vec3f {
+  var q = fract(p*vec3f(0.1031,0.1030,0.0973));
+  q += dot(q,q.yxz+33.33);
+  return fract((q.xxy+q.yxx)*q.zyx);
+}
+// Gaia DR3 Eq. 4.62, composed with the app's J2000 ecliptic axes:
+// world = (ecliptic X, ecliptic Z, -ecliptic Y). Fixed, independent of the camera.
+fn galacticDirection(direction: vec3f) -> vec3f {
+  return vec3f(dot(direction,vec3f(-0.0548755604,-0.0964766263,0.9938213790)),
+    dot(direction,vec3f(0.4941094279,0.8622858751,0.1109907336)),
+    dot(direction,vec3f(-0.8676661490,0.4971471917,0.0003515900)));
+}
+fn skyUV(galactic: vec3f) -> vec2f {
+  // The Gaia panorama has l=0 in the centre, increasing longitude to the left.
+  let radial = length(galactic.xy);
+  var longitude = 0.0;
+  if (radial>0.000001) { longitude = atan2(galactic.y,galactic.x); }
+  return vec2f(0.5-longitude/TAU,0.5-atan2(galactic.z,radial)/PI);
+}
+fn milkyWay(galactic: vec3f, footprint: f32) -> vec3f {
+  let uv = skyUV(galactic);
+  let radial = length(galactic.xy);
+  // Explicit LOD is safe in the non-uniform ray-miss branch. Longitude stretches
+  // near the poles; suppress the negligible polar cap to remove its singularity.
+  let dimensions = vec2f(textureDimensions(maps,0));
+  let texels = footprint*max(dimensions.x/(TAU*max(radial,0.00001)),dimensions.y/PI);
+  let lod = clamp(log2(max(texels,1.0)),0.0,f32(textureNumLevels(maps)-1u));
+  let sky = textureSampleLevel(maps,mapSampler,uv,12,lod).rgb;
+  return sky*0.075*smoothstep(0.0,0.025,radial);
 }
 fn stars(rd: vec3f) -> vec3f {
-  var result = vec3f(0.0015,0.0025,0.005);
-  // World-direction grid: the stars stay put as the camera turns. No geometry.
+  let footprint = 2.0*camera.eye.w/max(camera.viewport.y,1.0);
+  let galactic = galacticDirection(rd);
+  let galaxy = milkyWay(galactic,footprint);
+  var result = vec3f(0.00035,0.0005,0.0008)+galaxy;
+  // Mostly faint, neutral stars, with a sparse bright tail. Count follows the
+  // plane; the observed clouds and dust modulate the faint-star brightness.
+  let cloud = sqrt(clamp(dot(galaxy,vec3f(0.2126,0.7152,0.0722))/0.075,0.0,1.0));
   for (var layer = 0; layer < 2; layer++) {
-    let p = rd * (230.0 + f32(layer) * 240.0);
+    let frequency = 230.0+f32(layer)*240.0;
+    let p = rd*frequency;
     let cell = floor(p);
-    let seed = hash(cell);
-    let local = fract(p) - 0.5;
-    let core = exp(-dot(local,local) * 85.0);
-    let exists = smoothstep(0.962, 0.998, seed);
-    let warmth = hash(cell + vec3f(5.0));
-    result += mix(vec3f(0.54,0.69,1.0),vec3f(1.0,0.82,0.61),warmth) * core * exists * 2.0;
+    // Cell-constant acceptance keeps a star intact across cloud/dust edges.
+    let latitude = dot((cell+0.5)/frequency,vec3f(-0.8676661490,0.4971471917,0.0003515900));
+    let density = 0.025+0.08*exp(-latitude*latitude/0.0225);
+    let random = starRandom(cell);
+    if (random.x<1.0-density) { continue; }
+    let square = random.y*random.y;
+    let fourth = square*square;
+    let bright = fourth*fourth;
+    let centre = vec3f(0.35)+0.3*starRandom(cell+73.0);
+    let local = fract(p)-centre;
+    let variance = mix(0.0025,0.006,bright);
+    let pixel = footprint*frequency;
+    let filtered = variance+min(pixel*pixel/12.0,0.012);
+    let distanceSquared = dot(local,local);
+    // The compact support reaches zero before a grid face, so adjacent cells
+    // cannot introduce a hard edge during camera movement.
+    let support = 1.0-smoothstep(0.0625,0.1225,distanceSquared);
+    let core = exp(-distanceSquared/(2.0*filtered))*variance/filtered*support;
+    let resolved = 1.0-smoothstep(0.4,1.0,pixel);
+    let colour = mix(vec3f(0.78,0.86,1.0),vec3f(1.0,0.87,0.70),random.z);
+    result += colour*core*mix(0.18*mix(0.6,1.0,cloud),3.0,bright)*resolved;
   }
   return result;
 }
@@ -364,7 +461,7 @@ fn orbitCorner(index: u32) -> vec2f {
 
 // Atmosphere calculations use planet radii as the length unit. RGB stores
 // vertical molecular optical depth; w is the illustrative density scale height.
-// See ATMOSPHERES.md for the display-scale calibration and limitations.
+// See notes/ATMOSPHERES.md at the repository root for calibration and limitations.
 struct AtmosphereResult { scattering: vec3f, transmission: vec3f }
 
 fn sphereInterval(ro: vec3f, rd: vec3f, radius: f32) -> vec2f {
@@ -391,7 +488,9 @@ fn aerosolProfile(index: u32) -> vec4f {
 
 fn atmosphereDensity(point: vec3f, scaleHeight: f32) -> vec2f {
   let altitude = max(length(point)-1.0,0.0);
-  return exp(-altitude/vec2f(scaleHeight,scaleHeight*0.5));
+  let molecular = exp(-altitude/scaleHeight);
+  // The aerosol scale height is exactly half the molecular scale height.
+  return vec2f(molecular,molecular*molecular);
 }
 
 // Four-point Gauss-Legendre quadrature on each side of closest approach.
@@ -524,13 +623,12 @@ fn compositeRingAtmospheres(background: vec3f, ro: vec3f, rd: vec3f, nearest: f3
     let body = bodies[hit];
     let point = ro + rd * nearest;
     let normal = normalize(point - body.sphere.xyz);
-    let uv = surfaceUV(normal, body);
     let lod = textureLOD(nearest, body.sphere.w, dot(normal,-rd));
-    let albedo = textureSampleLevel(maps,mapSampler,uv,hit,lod).rgb;
     if (hit == 0) {
-      let limb = pow(max(dot(normal,-rd),0.0),0.35);
-      color = albedo * vec3f(5.5,3.8,2.4) * (0.5 + 0.5 * limb);
+      color = solarSurface(normal,max(dot(normal,-rd),0.0),nearest,lod);
     } else {
+      let uv = surfaceUV(normal, body);
+      let albedo = textureSampleLevel(maps,mapSampler,uv,hit,lod).rgb;
       let light = normalize(bodies[0].sphere.xyz - point);
       let ndl = max(dot(normal,light),0.0);
       var shadow = 1.0;
@@ -550,14 +648,28 @@ fn compositeRingAtmospheres(background: vec3f, ro: vec3f, rd: vec3f, nearest: f3
   }
   if (hit<0) { color = stars(rd); }
   color = compositeRingAtmospheres(color,ro,rd,nearest);
-  // A warm solar aureole, hidden by any foreground planet (including eclipses).
+  // Bounded low corona. Foreground spheres/rings occlude its emitting envelope;
+  // no expensive noise is evaluated outside the solar neighbourhood.
   let sunVector = bodies[0].sphere.xyz-ro;
   let sunT = dot(sunVector,rd);
-  if (sunT > 0.0 && sunT < nearest + bodies[0].sphere.w) {
-    let distance = length(sunVector-rd*sunT) / bodies[0].sphere.w;
-    let haloDistance = distance + max(distance-1.0,0.0);
-    let corona = (exp(-max(haloDistance-1.0,0.0)*5.0)*0.22 + exp(-haloDistance*0.65)*0.035)*0.5;
-    color += vec3f(1.0,0.38,0.065) * corona;
+  if (sunT>0.0) {
+    let offset = rd*sunT-sunVector;
+    let distance = length(offset)/bodies[0].sphere.w;
+    if (distance>1.0 && distance<1.5) {
+      let shellDepth = sphereHit(ro,rd,bodies[0].sphere.xyz,bodies[0].sphere.w*1.5);
+      if (nearest>=shellDepth) {
+        let n = solarLocal(normalize(offset));
+        let structure = .65+.7*solarNoise(n*9.0+camera.solar.x*.012);
+        let height = distance-1.0;
+        let corona = (.17*exp(-height*18.0)+.016*exp(-height*6.0))*structure*(1.0-smoothstep(.30,.50,height));
+        var transmission = 1.0;
+        let ringT = ringIntersection(ro,rd);
+        if (ringT<shellDepth) {
+          transmission -= textureSampleLevel(ringMap,mapSampler,vec2f(ringUV(ro+rd*ringT),.5),0.0).a;
+        }
+        color += vec3f(1.0,.34,.035)*corona*transmission;
+      }
+    }
   }
   return vec4f(color,1.0);
 }
