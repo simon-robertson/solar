@@ -8,6 +8,12 @@ reversed; it is a visual trail, not a stored history of sampled positions.
 Stroke width is uniformly thin, matching the faint sections; only brightness
 changes along each path.
 
+The bright endpoint contributes 50% of its original linear HDR intensity
+(`vec3f(0.29,0.265,0.19) * 0.5`). The faint endpoint, trail progression, stroke
+coverage, selected-body emphasis and moon-circle intensity are unchanged. Paths
+use additive blending, so this scales their effective visual opacity without
+changing geometry or the blend pipeline.
+
 Each ellipse uses 1024 finite line segments from a shared static unit circle.
 Segments are clipped against the near plane and viewport before perspective
 division, then expanded into thin screen-space ribbons. This keeps width stable
@@ -91,11 +97,11 @@ For orbital-detail changes, run:
 bun test tests/orbits.test.js
 ```
 
-Then open `/orbits-verify.html` for 14 focused GPU checks. Actual raster readbacks
+Then open `/orbits-verify.html` for 15 focused GPU checks. Actual raster readbacks
 are compared against an independent, densely sampled mathematical ellipse,
 including near-coplanar views, near-plane crossings and every planet's default
 close-up. These also cover trail
-reversal, constant stroke width under zoom/foreshortening, hollow circle coverage,
+reversal, half-strength head/tail contrast, constant stroke width under zoom/foreshortening, hollow circle coverage,
 fixed marker radius, foreground sphere/ring coverage, orbit toggling, camera-motion
 opacity, inactive LOD and production pipeline validation. They do not execute the
 unrelated texture, atmosphere, eclipse or bloom test groups.

@@ -42,13 +42,6 @@
       <button id="planet-view" class="view-button" aria-pressed="false" disabled><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="6"/><path d="M4 10h12M10 4c-4 3-4 9 0 12 4-3 4-9 0-12Z"/></svg> Body view</button>
     </div>
 
-    <div class="scene-controls">
-      <div class="zoom-controls" role="group" aria-label="Scene zoom">
-        <button id="zoom-in" class="icon-button" aria-label="Zoom in" title="Zoom in"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14"/></svg></button>
-        <button id="zoom-out" class="icon-button" aria-label="Zoom out" title="Zoom out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
-      </div>
-    </div>
-
     <aside id="settings" class="settings-panel" aria-label="Render settings" hidden>
       <div class="panel-heading"><h2>Display settings</h2><button id="settings-close" class="icon-button" aria-label="Close settings">×</button></div>
       <label class="switch-row" for="orbits"><span>Orbital paths</span><input type="checkbox" id="orbits" checked><span class="switch" aria-hidden="true"></span></label>
@@ -76,7 +69,7 @@
     <div class="eyebrow"><span class="accent-line"></span>ABOUT SOLAR</div>
     <h2 id="about-title">The model</h2>
     <p>Solar is an interactive model of the Sun, eight planets and the Moon. Saturn’s seven major moons appear as markers in close views.</p>
-    <p>Drag to orbit the camera. Scroll or pinch with two fingers inside the scene to zoom. On mobile, you can also use the + and − zoom buttons. Select a body for a closer view. Press <kbd>Tab</kbd> or use the panel button in the header to show or hide the information panel. Press <kbd>Space</kbd> to pause, <kbd>R</kbd> to return to today, or <kbd>Esc</kbd> to return to the system view.</p>
+    <p>Drag to orbit the camera. Scroll or pinch with two fingers inside the scene to zoom. Select a body for a closer view. Press <kbd>Tab</kbd> or use the panel button in the header to show or hide the information panel. Press <kbd>Space</kbd> to pause, <kbd>R</kbd> to return to today, or <kbd>Esc</kbd> to return to the system view.</p>
     <h3>Scale & orbital model</h3>
     <p>Sizes and distances are compressed independently for visibility. Planets use JPL’s approximate Keplerian elements for 1800–2050; Earth uses the Earth–Moon barycentre. The Moon follows a simplified ellipse. This is an illustrative orrery, not an ephemeris or an N-body simulation. Dates stop at the model’s limits.</p>
     <h3>Sources & imagery</h3>

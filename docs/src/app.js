@@ -26,7 +26,7 @@ let compactScene = false;
 let labelsSuppressed = true, labelsQuietSince = 0, labelsFadeStarted = 0, satelliteNamesActive = false;
 const buttons = [], labels = [], satelliteLabels = [];
 const labelBounds = new Float32Array((BODIES.length+SATURN_MOONS.length)*4);
-const annotationPanels = [".header",".intro",".view-controls",".zoom-controls",".bottom-deck","#settings"].map(selector => document.querySelector(selector));
+const annotationPanels = [".header",".intro",".view-controls",".bottom-deck","#settings"].map(selector => document.querySelector(selector));
 const annotationBounds = new Float32Array(annotationPanels.length*4);
 const nav = $("planet-nav");
 const labelsContainer = $("labels");
@@ -249,15 +249,13 @@ document.addEventListener("keydown",event => {
 
 const sceneGestures = new SceneGestures(canvas,camera,hideMovingLabels,pick);
 const mobileZoom = window.matchMedia("(any-pointer: coarse), (max-width: 850px)");
-function updateZoomHint() { $("zoom-gesture").textContent = mobileZoom.matches ? "PINCH / ± TO ZOOM" : "SCROLL TO ZOOM"; }
+function updateZoomHint() { $("zoom-gesture").textContent = mobileZoom.matches ? "PINCH TO ZOOM" : "SCROLL TO ZOOM"; }
 updateZoomHint();
 mobileZoom.addEventListener("change",() => { updateZoomHint(); refreshAnnotationBounds(); });
-function zoomScene(delta) { hideMovingLabels(); camera.zoom(delta); }
-$("zoom-in").addEventListener("click",() => zoomScene(-200));
-$("zoom-out").addEventListener("click",() => zoomScene(200));
 canvas.addEventListener("wheel",event => {
   event.preventDefault();
-  zoomScene(Math.max(-200,Math.min(200,event.deltaY)));
+  hideMovingLabels();
+  camera.zoom(Math.max(-200,Math.min(200,event.deltaY)));
 },{ passive: false });
 canvas.addEventListener("dblclick",overview);
 

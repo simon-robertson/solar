@@ -10,7 +10,7 @@ contents are not served by the local app or deployed with the GitHub Pages site.
 - [Rendering optimisation follow-up](RENDERING-OPTIMISATIONS.md): filtered compute bloom, shading/submission cleanup, GPU timing, raw measurements and rejected alternatives.
 - [Milky Way and starfield](MILKY-WAY.md): Gaia sky orientation, filtered stars, resource cost, visual references and focused GPU checks.
 - [Sun visuals](SUN-VISUALS.md): animated photosphere, filtering, flare removal and measured costs.
-- [Mobile zoom](MOBILE-ZOOM.md): Android pinch investigation, explicit zoom controls, browser checks and remaining device validation.
+- [Mobile zoom](MOBILE-ZOOM.md): resolved Android caching report, pinch support and temporary control history.
 - [Texture attribution](TEXTURE-ATTRIBUTION.md): source assets, license links and texture handling.
 
 The root [README.md](../README.md) covers running the app, the project layout and

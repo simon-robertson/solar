@@ -447,7 +447,8 @@ fn orbitCorner(index: u32) -> vec2f {
     inverseDepth = mix(input.start.z,input.end.z,t);
     let anomaly = mix(input.start.w*input.start.z,input.end.w*input.end.z,t)/inverseDepth;
     let trail = orbitTrail(input.style.y,anomaly,input.style.z);
-    ink = mix(vec3f(0.026,0.025,0.020),vec3f(0.29,0.265,0.19),trail)*input.style.w;
+    // Half-strength bright head; retain the faint baseline and stroke coverage.
+    ink = mix(vec3f(0.026,0.025,0.020),vec3f(0.29,0.265,0.19)*0.5,trail)*input.style.w;
   }
   if (coverage<=0.0) { discard; }
   let rd = cameraRay(pixel);

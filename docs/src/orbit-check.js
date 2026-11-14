@@ -126,6 +126,15 @@ try {
   const before = project(circlePoint(-.5)), after = project(circlePoint(.5));
   check("Orbit brightness trails the body and reverses with time",peakAt(forward,before)>peakAt(forward,after)*3 && peakAt(reverse,after)>peakAt(reverse,before)*3);
   orbits[13] = 1;
+  // Sample identical geometry/coverage at the bright head and faint tail.
+  // The original head/tail RGB sums were .745/.071; only the head is halved.
+  const sampleAngle = -.5, samplePoint = project(circlePoint(sampleAngle));
+  orbits[12] = sampleAngle+.1;
+  const head = peakAt(await draw(),samplePoint);
+  orbits[12] = sampleAngle+.9*Math.PI*2;
+  const tail = peakAt(await draw(),samplePoint);
+  const contrast = head/tail, expectedContrast = .745*.5/.071;
+  check("Orbit head has half-strength contrast against the faint tail",Math.abs(contrast-expectedContrast)<expectedContrast*.025,`${contrast.toFixed(3)} vs ${expectedContrast.toFixed(3)} expected`);
   const widths = [], pairs = [];
   for (const [distance,inclination] of [[5,.3],[10,.3],[5,1],[10,1]]) {
     view(distance,inclination);
