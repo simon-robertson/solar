@@ -20,12 +20,56 @@
     <span class="header-note">SOLAR SYSTEM EXPLORER</span>
     <div class="header-actions">
       <span id="gpu-status" class="gpu-status"><i></i> INTERACTIVE MODEL</span>
+      <button id="cockpit-toggle" class="icon-button" aria-label="Enter spacecraft cockpit" aria-pressed="false" title="Spacecraft cockpit" hidden><svg viewBox="0 0 24 24"><path d="m3 17 3-11h12l3 11-5 3H8ZM6 6l3 9h6l3-9M9 15l-1 5m7-5 1 5M9 10h6"/></svg></button>
       <button id="info-toggle" class="icon-button" aria-label="Hide information and playback panels" aria-controls="information-panel playback-panel" aria-expanded="true" aria-keyshortcuts="Tab" title="Hide information and playback panels (Tab)"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15"/><path d="M10 4.5v15M6.5 8h1M6.5 11h1M6.5 14h1"/></svg></button>
       <button id="about-open" class="icon-button" aria-label="About Solar" title="About Solar"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v6m0-10v1"/></svg></button>
       <button id="settings-open" class="icon-button" aria-label="Render settings" aria-expanded="false" title="Render settings"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="16" cy="17" r="3"/></svg></button>
       <button id="fullscreen" class="icon-button" aria-label="Enter fullscreen" title="Fullscreen"><svg viewBox="0 0 24 24"><path d="M4 9V4h5m6 0h5v5m0 6v5h-5m-6 0H4v-5"/></svg></button>
     </div>
   </header>
+
+  <section id="cockpit" aria-label="Spacecraft flight instruments" hidden>
+    <div id="cockpit-shell" class="cockpit-shell" aria-hidden="true"></div>
+    <div class="flight-compass"><span>HEADING</span><strong id="flight-heading">000°</strong><div class="compass-scale" aria-hidden="true"></div><i></i></div>
+    <div class="flight-reticle" aria-hidden="true"><svg viewBox="0 0 100 70"><path d="M6 35h24m40 0h24M50 6v13m0 32v13M40 35h20m-10-5v10"/><path d="M23 18v-5h12m30 0h12v5M23 52v5h12m30 0h12v-5" opacity=".4"/></svg></div>
+    <div class="flight-glass flight-glass-left"><span class="flight-caption">VECTOR / LOCAL</span><div class="flight-speed"><strong id="flight-speed">0.00</strong><span>DISPLAY U/S</span></div><div class="flight-meter"><i id="flight-meter"></i></div><span>CRUISE LIMIT <b id="flight-limit">4.00</b></span></div>
+    <div class="flight-glass flight-glass-right"><span class="flight-caption">ATTITUDE</span><strong id="flight-pitch">0°</strong><span>PITCH / HORIZON</span><svg class="attitude-ladder" viewBox="0 0 140 45" aria-hidden="true"><path d="M0 6h45m50 0h45M15 22h38m34 0h38M30 38h28m24 0h28M70 0v12"/></svg></div>
+    <div class="instrument-deck" role="group" aria-label="Cockpit dashboard">
+      <section class="instrument instrument-left" aria-label="Local velocity instruments">
+        <div class="instrument-bezel" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <div class="instrument-screen">
+          <div class="instrument-title"><span>TRANSLATION</span><span>01 / LOCAL</span></div>
+          <div class="vector-row"><span>FWD</span><div class="axis-track"><i id="vector-forward-meter"></i></div><strong id="vector-forward">+0.00</strong></div>
+          <div class="vector-row"><span>LAT</span><div class="axis-track"><i id="vector-lateral-meter"></i></div><strong id="vector-lateral">+0.00</strong></div>
+          <div class="vector-row"><span>VERT</span><div class="axis-track"><i id="vector-vertical-meter"></i></div><strong id="vector-vertical">+0.00</strong></div>
+          <div class="instrument-footer"><span>DISPLAY U/S</span><span class="instrument-link"><i></i>INPUT BUS</span></div>
+        </div>
+        <div class="instrument-switches" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      </section>
+      <section class="instrument instrument-center flight-console" aria-label="Flight control status">
+        <div class="instrument-bezel" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <div class="instrument-screen">
+          <div class="instrument-title"><span>SOLAR / FLIGHT DECK</span><i class="manual-light" aria-hidden="true"></i></div>
+          <span class="flight-caption">MANUAL TRANSLATION</span>
+          <strong id="flight-state">STATIONARY</strong>
+          <div class="flight-keymap"><span><kbd>W S</kbd> THRUST</span><span><kbd>A D</kbd> STRAFE</span><span><kbd>Q ↓ E ↑</kbd> LIFT</span></div>
+          <div class="instrument-footer"><span>DRAG TO STEER</span><span>ESC / EXIT</span></div>
+        </div>
+      </section>
+      <section class="instrument instrument-right" aria-label="Attitude instruments">
+        <div class="instrument-bezel" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <div class="instrument-screen">
+          <div class="instrument-title"><span>ATTITUDE</span><span>02 / GUIDANCE</span></div>
+          <div class="instrument-attitude" aria-hidden="true">
+            <svg viewBox="0 0 240 70"><defs><pattern id="attitude-grid" width="24" height="14" patternUnits="userSpaceOnUse"><path d="M24 0H0v14"/></pattern></defs><path d="M0 0h240v70H0Z" fill="url(#attitude-grid)" stroke="none"/><g id="console-horizon"><path d="M0 35h89m62 0h89M44 21h44m64 0h44M64 49h32m48 0h32"/><path d="M0 35h240" opacity=".2"/></g><path class="attitude-reference" d="m99 34 9 5 12-8 12 8 9-5M120 9v9m0 36v7"/></svg>
+          </div>
+          <div class="instrument-values"><span>HDG <strong id="console-heading">000°</strong></span><span>PITCH <strong id="console-pitch">0°</strong></span></div>
+          <div class="telemetry-trace" aria-hidden="true"><svg viewBox="0 0 240 16"><path d="M0 9h35l5-3 8 5 10-4 8 2h40l5-3 8 5 10-3h35l5-4 8 7 8-2h55"/></svg><i class="telemetry-sweep"></i></div>
+        </div>
+        <div class="instrument-switches" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      </section>
+    </div>
+  </section>
 
   <main>
     <section id="information-panel" class="intro" aria-live="polite">
@@ -70,6 +114,7 @@
     <h2 id="about-title">The model</h2>
     <p>Solar is an interactive model of the Sun, eight planets and the Moon. Saturn’s seven major moons appear as markers in close views.</p>
     <p>Drag to orbit the camera. Scroll or pinch with two fingers inside the scene to zoom. Select a body for a closer view. Press <kbd>Tab</kbd> or use the panel button in the header to show or hide the information and playback panels. Press <kbd>Space</kbd> to pause, <kbd>R</kbd> to return to today, or <kbd>Esc</kbd> to return to the system view.</p>
+    <p>In landscape, the spacecraft button enters cockpit mode. Drag to steer; use <kbd>W</kbd>/<kbd>S</kbd> for forward/backward movement, <kbd>A</kbd>/<kbd>D</kbd> to strafe, and <kbd>E</kbd>/<kbd>Q</kbd> to move up/down relative to the spacecraft. Opposite keys cancel. Release the keys to brake smoothly. The cruise limit is 4 display units per second in every view. Flight works while simulation time is paused. The spacecraft button or <kbd>Esc</kbd> restores the previous view; portrait orientation also exits.</p>
     <h3>Scale & orbital model</h3>
     <p>Sizes and distances are compressed independently for visibility. Planets use JPL’s approximate Keplerian elements for 1800–2050; Earth uses the Earth–Moon barycentre. The Moon follows a simplified ellipse. This is an illustrative orrery, not an ephemeris or an N-body simulation. Dates stop at the model’s limits.</p>
     <h3>Sources & imagery</h3>

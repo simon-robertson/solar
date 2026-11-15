@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Solar — Cockpit comparison</title>
+<style>
+  * { box-sizing: border-box; } body { margin: 0; background: #080c10; color: #c2d8df; font: 12px ui-monospace,monospace; }
+  header { height: 52px; display: flex; align-items: center; gap: 20px; padding: 10px 16px; }
+  button, select { padding: 8px 10px; color: inherit; background: #14232b; border: 1px solid #47606a; cursor: pointer; font: inherit; }
+  button:disabled { opacity: .4; } a { color: inherit; } iframe { display: block; width: 1280px; height: 800px; border: 0; }
+  pre { padding: 16px; white-space: pre-wrap; line-height: 1.6; } p { margin: 12px 16px; max-width: 1000px; line-height: 1.7; }
+</style>
+<header><button id="run" disabled>Run animation comparison</button><label>Layout <select id="layout"><option value="1280,800">1280 × 800</option><option value="844,390">844 × 390</option><option value="390,844">390 × 844</option></select></label><button id="motion" aria-pressed="false">Static motion preview</button><label><input id="travel" type="checkbox"> Flight sample</label><span id="status" role="status">Preparing fixed 1280 × 800 fixture…</span><a href="./">Return to Solar</a></header>
+<iframe id="fixture" src="./" title="Fixed cockpit performance fixture"></iframe>
+<p>Alternating static/animated runs use the same paused overview at Performance resolution. Frame intervals include browser scheduling and GPU work; app CPU samples exclude browser paint and GPU execution. Flight sample holds E along the same reset trajectory for each batch to exercise changing sunlight. Animation on/off keeps scene work comparable and measures the optional DOM animation's effect. It is not an isolated GPU or paint timer. Saved preferences are restored after setup.</p>
+<pre id="results">No samples yet.</pre>
+<script type="module" src="./src/cockpit-check.js"></script>
+</html>

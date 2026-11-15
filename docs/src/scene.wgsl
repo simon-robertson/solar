@@ -3,7 +3,7 @@ struct Camera {
   right: vec4f,     // basis, aspect
   up: vec4f,        // basis, elapsed real seconds
   forward: vec4f,   // basis, exposure
-  viewport: vec4f,  // width, height, selected body, orbit visibility
+  viewport: vec4f,  // width, height, selected body, orbit style (0 off, 1 normal, 2 cockpit)
   effects: vec4f,   // bloom strength, atmosphere visibility, render/CSS ratio, annotation opacity
   solar: vec4f,     // signed surface-animation seconds, reserved
 }
@@ -449,6 +449,11 @@ fn orbitCorner(index: u32) -> vec2f {
     let trail = orbitTrail(input.style.y,anomaly,input.style.z);
     // Half-strength bright head; retain the faint baseline and stroke coverage.
     ink = mix(vec3f(0.026,0.025,0.020),vec3f(0.29,0.265,0.19)*0.5,trail)*input.style.w;
+    if (camera.viewport.w>1.5) {
+      // Craft-window navigation guides: retain geometry, trail and occlusion,
+      // with a cyan light level that remains readable against the starfield.
+      ink = mix(vec3f(0.015,0.045,0.05),vec3f(0.10,0.29,0.31),trail)*input.style.w;
+    }
   }
   if (coverage<=0.0) { discard; }
   let rd = cameraRay(pixel);

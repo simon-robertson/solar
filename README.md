@@ -50,6 +50,21 @@ See [GitHub's publishing-source documentation](https://docs.github.com/en/pages/
   This proximity detail fades out when you zoom away; see [orbital detail and LOD](notes/ORBITAL-DETAIL.md).
 - Drag the scene to orbit; scroll or pinch with both fingers inside the scene to
   zoom. Click or tap a planet to focus it.
+- On landscape displays, use the spacecraft icon in the top-right header to enter
+  cockpit mode. Drag to steer, use W/S for forward/backward, A/D to strafe, and
+  E/Q for up/down along the spacecraft's local vertical axis.
+  Movement accelerates and brakes smoothly; opposite keys cancel each other.
+  The cruise limit is 4 display units per second in every view. Flight uses real
+  time even when the simulation is paused.
+  Only the header and cockpit instruments remain visible. The icon or Escape
+  restores the previous view; rotating to portrait also exits cockpit mode.
+  Enabled orbital paths appear as cyan navigation guides through the cockpit
+  window, matching the flight instruments.
+  The recessed dashboard screens show local velocity and attitude. Subtle display
+  animation stops outside cockpit mode, while the page is hidden, and for reduced
+  motion preferences.
+  The matte gunmetal frame and instrument casings respond to the Sun's direction
+  and planetary shading, while the displays and cyan HUD stay self-lit.
 - Body labels hide during camera movement and fade back in once the camera settles.
 - Tab (or Shift+Tab) shows/hides the information and playback panels instead of
   moving focus. The panel button in the header provides the same toggle on touch
@@ -256,6 +271,15 @@ For sky-only changes, open **http://127.0.0.1:3000/sky-verify.html** for 14 focu
 GPU checks: Galactic orientation, independent Gaia panorama samples, seams/poles,
 clock/camera invariance, filtering, occlusion and the draw budget. Texture-profile
 changes also use `bun test tests/textures.test.js`.
+
+For cockpit changes, run `bun test tests/flight.test.js tests/scene-gestures.test.js`
+and `bun test tests/simulation.test.js -t camera`. Check landscape entry/exit,
+portrait fallback, focus loss and the real rendered view; see
+[cockpit notes](notes/COCKPIT.md) for the flight model and first-version validation.
+**http://127.0.0.1:3000/cockpit-verify.html** compares static/animated frame times
+at a fixed viewport and quality, and provides compact/portrait layout presets.
+Its **Flight sample** exercises sunlight changes along a repeatable trajectory.
+For cockpit sunlight changes, run `bun test tests/cockpit-lighting.test.js`.
 
 HTTP checks cover assets and MIME types, missing files, private-file/path-traversal
 rejection, HEAD and unsupported methods. Browser QA also covers Earth and Saturn

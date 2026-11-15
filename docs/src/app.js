@@ -5,6 +5,7 @@ import { Renderer } from "./renderer.js";
 import { SATURN_MOONS, PLANET_ORBITS, ORBIT_FLOATS, satelliteVisibility } from "./orbit-details.js";
 import { AdaptiveQuality } from "./adaptive-quality.js";
 import { SceneGestures } from "./scene-gestures.js";
+import { CockpitLighting } from "./cockpit-lighting.js";
 
 const $ = id => document.getElementById(id);
 const canvas = $("universe");
@@ -30,6 +31,16 @@ const annotationBounds = new Float32Array(annotationPanels.length*4);
 const nav = $("planet-nav");
 const labelsContainer = $("labels");
 const informationPanel = $("information-panel"), infoToggle = $("info-toggle");
+const cockpitToggle = $("cockpit-toggle"), cockpit = $("cockpit"), main = document.querySelector("main");
+const landscape = window.matchMedia("(orientation: landscape)");
+const regularCanvasLabel = canvas.getAttribute("aria-label");
+const flightSpeed = $("flight-speed"), flightHeading = $("flight-heading"), flightPitch = $("flight-pitch"), flightState = $("flight-state"), flightMeter = $("flight-meter");
+const vectorReadouts = [$("vector-forward"),$("vector-lateral"),$("vector-vertical")];
+const vectorMeters = [$("vector-forward-meter"),$("vector-lateral-meter"),$("vector-vertical-meter")];
+const consoleHeading = $("console-heading"), consolePitch = $("console-pitch"), consoleHorizon = $("console-horizon");
+const cockpitLighting = new CockpitLighting($("cockpit-shell"),[document.querySelector(".instrument-left"),document.querySelector(".instrument-center"),document.querySelector(".instrument-right")]);
+let lastFlightUI = 0;
+let lastCockpitLight = 0;
 const playbackPanel = $("playback-panel");
 const loadScreen = $("loading");
 const loadingText = $("loading-text");
@@ -125,6 +136,7 @@ for (const moon of SATURN_MOONS) {
 }
 
 function selectBody(index) {
+  if (camera.flight.active) return;
   hideMovingLabels();
   selected = index;
   document.body.dataset.view = "body";
@@ -144,6 +156,7 @@ function selectBody(index) {
 }
 
 function overview() {
+  if (camera.flight.active) return;
   hideMovingLabels();
   camera.overview();
   if (reducedMotion) camera.snap = true;
@@ -173,6 +186,7 @@ function updatePause() {
 function togglePause() { simulation.paused = !simulation.paused; updatePause(); }
 function reset() { hideMovingLabels(); simulation.reset(); updatePause(); lastUI = 0; }
 function setSettings(open) {
+  if (open && camera.flight.active) return;
   $("settings").hidden = !open;
   refreshAnnotationBounds();
   $("settings-open").setAttribute("aria-expanded",String(open));
@@ -181,6 +195,7 @@ function setSettings(open) {
 }
 
 function toggleInformation() {
+  if (camera.flight.active) return;
   const show = informationPanel.hidden;
   // Do not leave focus inside a panel that has just been removed from view.
   if (!show && (informationPanel.contains(document.activeElement) || playbackPanel.contains(document.activeElement))) document.activeElement.blur();
@@ -194,6 +209,60 @@ function toggleInformation() {
   hideMovingLabels();
   resizeScene();
 }
+
+function setCockpit(active) {
+  active = active && landscape.matches;
+  if (active===camera.flight.active) return;
+  sceneGestures.cancel();
+  if (active) {
+    setSettings(false);
+    $("about").close();
+    camera.enterCockpit();
+  } else camera.exitCockpit(simulation.data);
+  document.body.classList.toggle("cockpit-active",active);
+  main.inert = active;
+  cockpit.hidden = !active;
+  for (const id of ["info-toggle","about-open","settings-open"]) $(id).disabled = active;
+  cockpitToggle.setAttribute("aria-pressed",String(active));
+  cockpitToggle.setAttribute("aria-label",active ? "Exit spacecraft cockpit" : "Enter spacecraft cockpit");
+  cockpitToggle.title = active ? "Exit spacecraft cockpit (Esc)" : "Spacecraft cockpit";
+  canvas.setAttribute("aria-label",active ? "Spacecraft cockpit. Drag to steer. W and S move forward and backward; A and D strafe; E moves up and Q moves down. Escape exits." : regularCanvasLabel);
+  if (active) {
+    $("flight-limit").textContent = camera.flight.maxSpeed.toFixed(2);
+    updateFlightUI();
+    cockpitLighting.update(camera,simulation.data);
+  }
+  const focusTarget = landscape.matches ? cockpitToggle : $("fullscreen").hidden ? document.querySelector(".brand") : $("fullscreen");
+  focusTarget.focus({ preventScroll: true });
+  hideMovingLabels();
+  resizeScene();
+}
+
+function updateFlightUI() {
+  const flight = camera.flight;
+  flightSpeed.textContent = flight.speed.toFixed(2);
+  const heading = `${String(Math.round((Math.atan2(camera.forward[0],-camera.forward[2])*180/Math.PI+360)%360)%360).padStart(3,"0")}°`;
+  const pitch = `${Math.round(-camera.phi*180/Math.PI)}°`;
+  flightHeading.textContent = consoleHeading.textContent = heading;
+  flightPitch.textContent = consolePitch.textContent = pitch;
+  flightState.textContent = flight.thrusting ? "THRUST" : flight.speed>.01 ? "BRAKING" : "STATIONARY";
+  flightMeter.style.transform = `scaleX(${Math.min(1,flight.speed/flight.maxSpeed)})`;
+  for (let i = 0; i<3; i++) {
+    const basis = i===0 ? camera.forward : i===1 ? camera.right : camera.up;
+    const value = flight.velocity[0]*basis[0]+flight.velocity[1]*basis[1]+flight.velocity[2]*basis[2];
+    const displayValue = Math.abs(value)<.005 ? 0 : value;
+    vectorReadouts[i].textContent = `${displayValue<0 ? "−" : "+"}${Math.abs(displayValue).toFixed(2)}`;
+    vectorMeters[i].style.transform = `scaleX(${Math.max(-1,Math.min(1,value/flight.maxSpeed))})`;
+  }
+  consoleHorizon.style.transform = `translateY(${Math.max(-22,Math.min(22,-camera.phi*15))}px)`;
+}
+
+cockpitToggle.hidden = !landscape.matches;
+cockpitToggle.addEventListener("click",() => setCockpit(!camera.flight.active));
+landscape.addEventListener("change",() => {
+  if (!landscape.matches) setCockpit(false);
+  cockpitToggle.hidden = !landscape.matches;
+});
 
 $("overview").addEventListener("click",overview);
 $("planet-view").addEventListener("click",() => { if (selected>=0) selectBody(selected); });
@@ -229,6 +298,14 @@ $("fullscreen").addEventListener("click",async () => {
 document.addEventListener("fullscreenchange",() => $("fullscreen").setAttribute("aria-label",document.fullscreenElement?"Exit fullscreen":"Enter fullscreen"));
 
 document.addEventListener("keydown",event => {
+  if (camera.flight.active) {
+    if (event.code==="Escape") { event.preventDefault(); setCockpit(false); return; }
+    if (event.ctrlKey || event.altKey || event.metaKey || /INPUT|SELECT|TEXTAREA/.test(event.target.tagName) || event.target.isContentEditable || $("about").open) {
+      camera.flight.stop(); return;
+    }
+    if (!event.repeat && camera.flight.setKey(event.code,true)) event.preventDefault();
+    return;
+  }
   if (event.key==="Tab" && !event.ctrlKey && !event.altKey && !event.metaKey) {
     event.preventDefault();
     if (!event.repeat) toggleInformation();
@@ -239,6 +316,11 @@ document.addEventListener("keydown",event => {
   if (/INPUT|SELECT|TEXTAREA/.test(event.target.tagName) || event.target.isContentEditable) return;
   if (event.code==="Space" && !event.target.closest("button,a,summary")) { event.preventDefault(); togglePause(); }
   else if (event.code==="KeyR") reset();
+});
+document.addEventListener("keyup",event => { camera.flight.setKey(event.code,false); });
+window.addEventListener("blur",() => { camera.flight.stop(); sceneGestures.cancel(); });
+document.addEventListener("focusin",event => {
+  if (event.target.closest("input,select,textarea,[contenteditable],dialog")) camera.flight.stop();
 });
 
 const sceneGestures = new SceneGestures(canvas,camera,hideMovingLabels,pick);
@@ -254,6 +336,7 @@ canvas.addEventListener("wheel",event => {
 canvas.addEventListener("dblclick",overview);
 
 function pick(x,y) {
+  if (camera.flight.active) return;
   const bounds = canvas.getBoundingClientRect();
   x -= bounds.left; y -= bounds.top;
   let closest = -1, bestScore = Infinity;
@@ -278,6 +361,7 @@ function hideMovingLabels() {
 }
 
 function updateLabelVisibility(now) {
+  if (camera.flight.active) { hideMovingLabels(); return; }
   if (camera.moving || sceneGestures.dragging) { hideMovingLabels(); return; }
   if (!labelsSuppressed) return;
   if (!labelsQuietSince) labelsQuietSince = now;
@@ -417,6 +501,8 @@ function frame(now) {
   const dt = Math.min(.05,Math.max(0,rawDelta));
   simulation.tick(dt);
   camera.update(dt,simulation.data);
+  if (camera.flight.active && now-lastCockpitLight>33) { cockpitLighting.update(camera,simulation.data); lastCockpitLight = now; }
+  if (camera.flight.active && now-lastFlightUI>100) { updateFlightUI(); lastFlightUI = now; }
   updateLabelVisibility(now);
   const fade = Math.min(1,Math.max(0,(now-labelsFadeStarted)/350));
   renderer.markerOpacity = labelsSuppressed ? 0 : reducedMotion ? 1 : 1-Math.pow(1-fade,3);
@@ -471,6 +557,9 @@ function resizeScene() {
 }
 const resizeObserver = new ResizeObserver(resizeScene);
 function resumeFrameLoop() {
+  document.body.classList.toggle("page-hidden",document.hidden);
+  camera.flight.stop();
+  sceneGestures.cancel();
   cancelAnimationFrame(animation); animation = 0; lastTime = 0;
   adaptiveQuality.reset();
   frames = 0; frameMillis = 0; cpuMillis = 0;
@@ -479,6 +568,7 @@ function resumeFrameLoop() {
 document.addEventListener("visibilitychange",resumeFrameLoop);
 window.addEventListener("pageshow",event => { if (event.persisted) resumeFrameLoop(); });
 window.addEventListener("pagehide",event => {
+  camera.flight.stop();
   if (event.persisted) { cancelAnimationFrame(animation); animation = 0; return; }
   running = false; cancelAnimationFrame(animation); resizeObserver.disconnect(); renderer.destroy();
 });
@@ -487,6 +577,7 @@ try {
   // Apply saved resolution before the renderer creates its first targets.
   restorePreferences();
   updatePause();
+  await cockpitLighting.init();
   await renderer.init(simulation.data,message => { loadingText.textContent = message; });
   stats.textures.textContent = `${renderer.maps.width} × ${renderer.maps.height} · ${renderer.maps.mipLevelCount} levels`;
   refreshAnnotationBounds();

@@ -1,4 +1,5 @@
 import { BODIES, BODY_FLOATS } from "./data.js";
+import { Flight } from "./flight.js";
 
 export class Camera {
   constructor() {
@@ -17,15 +18,41 @@ export class Camera {
     this.distance = this.goalDistance = 100;
     this.focused = -1;
     this.snap = true;
+    this.flight = new Flight();
+    this.savedView = null;
+  }
+
+  enterCockpit() {
+    if (this.flight.active) return;
+    this.savedView = {
+      theta: this.theta, goalTheta: this.goalTheta, phi: this.phi, goalPhi: this.goalPhi,
+      distance: this.distance, goalDistance: this.goalDistance, focused: this.focused,
+      snap: this.snap, focusOffset: this.focusOffset.slice(),
+    };
+    this.flight.enter(this.eye);
+    this.goalTheta = this.theta; this.goalPhi = this.phi;
+  }
+
+  exitCockpit(data) {
+    if (!this.flight.active) return;
+    this.flight.stop(); this.flight.active = false;
+    const { focusOffset, ...view } = this.savedView;
+    Object.assign(this,view);
+    this.focusOffset.set(focusOffset);
+    this.savedView = null;
+    // Reconstruct against the body's CURRENT position, not stale world space.
+    this.update(0,data);
   }
 
   overview() {
+    if (this.flight.active) return;
     this.focusOffset.set(this.target);
     this.focused = -1;
     this.goalTheta = .35; this.goalPhi = .72; this.goalDistance = 100;
   }
 
   focus(index, data) {
+    if (this.flight.active) return;
     this.focused = index;
     const o = index * BODY_FLOATS;
     for (let axis = 0; axis < 3; axis++) {
@@ -42,6 +69,7 @@ export class Camera {
   }
 
   zoom(delta) {
+    if (this.flight.active) return;
     const minimum = this.focused < 0 ? 8 : BODIES[this.focused].radius * 2.6;
     this.goalDistance = Math.max(minimum,Math.min(200,this.goalDistance * Math.exp(delta * .001)));
   }
@@ -62,6 +90,13 @@ export class Camera {
     this.theta += (this.goalTheta-this.theta)*blend;
     this.phi += (this.goalPhi-this.phi)*blend;
     this.distance += (this.goalDistance-this.distance)*blend;
+    this.updateBasis();
+    if (this.flight.active) {
+      this.flight.update(dt,this.forward,this.right,this.up);
+      this.eye.set(this.flight.position);
+      for (let axis = 0; axis<3; axis++) this.target[axis] = this.eye[axis]+this.forward[axis];
+      return;
+    }
     const o = this.focused * BODY_FLOATS;
     // Follow the body's motion throughout the flight while smoothly decaying
     // the initial look-at offset. Zoom completion must never snap the target.
@@ -71,11 +106,12 @@ export class Camera {
       this.focusOffset[axis] *= 1-blend;
       this.target[axis] = desired+this.focusOffset[axis];
     }
+    for (let axis = 0; axis<3; axis++) this.eye[axis] = this.target[axis]-this.distance*this.forward[axis];
+  }
+
+  updateBasis() {
     const cp = Math.cos(this.phi), sp = Math.sin(this.phi);
     const st = Math.sin(this.theta), ct = Math.cos(this.theta);
-    this.eye[0] = this.target[0] + this.distance * cp * st;
-    this.eye[1] = this.target[1] + this.distance * sp;
-    this.eye[2] = this.target[2] + this.distance * cp * ct;
     this.forward[0] = -cp*st; this.forward[1] = -sp; this.forward[2] = -cp*ct;
     this.right[0] = ct; this.right[1] = 0; this.right[2] = -st;
     this.up[0] = -sp*st; this.up[1] = cp; this.up[2] = -sp*ct;

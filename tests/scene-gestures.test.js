@@ -74,6 +74,20 @@ test("two stationary fingers never select a planet",() => {
   expect(picks).toEqual([]);
 });
 
+test("mode changes cancel every captured pointer without picking or a stale drag",() => {
+  const { camera, gestures, send, captured, picks } = setup();
+  send("pointerdown",1,100,100); send("pointerdown",2,200,100);
+  send("pointermove",2,250,100);
+  gestures.cancel();
+  expect(captured.size).toBe(0); expect(gestures.pointers.size).toBe(0);
+  expect(gestures.dragging).toBe(false); expect(gestures.pinchDistance).toBe(0);
+  const theta = camera.goalTheta;
+  send("pointermove",1,120,140); send("pointerup",1,120,140); send("pointerup",2,250,100);
+  expect(camera.goalTheta).toBe(theta); expect(picks).toEqual([]);
+  send("pointerdown",3,40,50); send("pointerup",3,40,50);
+  expect(picks).toEqual([[40,50]]);
+});
+
 test("cancellation and lost capture remove only the affected finger and never pick",() => {
   for (const type of ["pointercancel","lostpointercapture"]) {
     const { camera, gestures, captured, send, picks } = setup();

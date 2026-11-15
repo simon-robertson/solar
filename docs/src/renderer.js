@@ -184,6 +184,8 @@ export class Renderer {
   }
 
   render(camera,simulation,selected) {
+    const annotations = !camera.flight?.active;
+    const orbits = this.orbits;
     this.orbitDetails.update(simulation,camera,this.width/this.height);
     this.prepareAnnotations?.(this.orbitDetails);
     const u = this.uniforms;
@@ -191,20 +193,21 @@ export class Renderer {
     u[4] = camera.right[0]; u[5] = camera.right[1]; u[6] = camera.right[2]; u[7] = this.width/this.height;
     u[8] = camera.up[0]; u[9] = camera.up[1]; u[10] = camera.up[2]; u[11] = simulation.elapsedSeconds;
     u[12] = camera.forward[0]; u[13] = camera.forward[1]; u[14] = camera.forward[2]; u[15] = this.exposure;
-    u[16] = this.width; u[17] = this.height; u[18] = selected; u[19] = this.orbits ? 1 : 0;
+    u[16] = this.width; u[17] = this.height; u[18] = annotations ? selected : -1;
+    u[19] = orbits ? (annotations ? 1 : 2) : 0; // Off, normal paths, cyan cockpit projection.
     u[20] = this.bloom ? 0.325 : 0; u[21] = this.atmospheres ? 1 : 0;
     u[22] = this.width/Math.max(1,this.cssWidth);
-    u[23] = this.orbitDetails.saturnLod.opacity>0 ? this.markerOpacity : 0;
+    u[23] = annotations && this.orbitDetails.saturnLod.opacity>0 ? this.markerOpacity : 0;
     u[24] = simulation.solarSeconds;
     const device = this.device;
     device.queue.writeBuffer(this.uniformBuffer,0,u);
     device.queue.writeBuffer(this.bodyBuffer,0,simulation.data);
-    if (this.orbits || u[23]>0) device.queue.writeBuffer(this.orbitBuffer,0,this.orbitDetails.data);
+    if (orbits || u[23]>0) device.queue.writeBuffer(this.orbitBuffer,0,this.orbitDetails.data);
     const encoder = device.createCommandEncoder(this.encoderDescriptor);
     const scene = encoder.beginRenderPass(this.scenePass);
     scene.setPipeline(this.scenePipeline); scene.setBindGroup(0,this.sceneBind); scene.draw(3);
     this.drawCalls = 2; // Scene + final composite, plus optional batched details.
-    if (this.orbits) {
+    if (orbits) {
       const count = this.orbitDetails.saturnLod.opacity>0 ? ORBIT_COUNT : PLANET_ORBITS;
       scene.setPipeline(this.orbitPipeline); scene.draw(ORBIT_SEGMENTS*6,count);
       this.drawCalls++;

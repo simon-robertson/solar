@@ -1,0 +1,234 @@
+{
+  "date": "2026-11-15",
+  "method": "Four alternating 240-frame static/animated samples, each following 45 warm-up frames. Paused overview, fixed 1280x800 CSS viewport, Performance quality. Original baseline has no decorative animation; its mode labels are retained from the shared comparison harness. Final gunmetal/sunlight run holds E during each sample, resetting the craft to the same overview before every batch. Earlier redesign entries precede sunlight and material-neutralisation changes.",
+  "limitations": "rAF intervals include browser scheduling, rendering and GPU work; app CPU values exclude browser paint and GPU execution. These are not isolated GPU or paint timings. Native before/after and final animation pairs have matching viewport, DPR and target dimensions.",
+  "baseline": {
+    "viewport": [
+      1280,
+      800
+    ],
+    "devicePixelRatio": 2,
+    "samples": [
+      {
+        "animated": false,
+        "frames": 240,
+        "medianMs": 16.699999999999818,
+        "p95Ms": 17.399999999999636,
+        "over25ms": 0,
+        "longFrames": 0,
+        "medianAppCpuMs": 0.34,
+        "draws": "3",
+        "resolution": "1344 \u00d7 840",
+        "gpuErrors": "0"
+      },
+      {
+        "animated": true,
+        "frames": 240,
+        "medianMs": 16.69999999999891,
+        "p95Ms": 17.299999999999272,
+        "over25ms": 0,
+        "longFrames": 0,
+        "medianAppCpuMs": 0.22,
+        "draws": "3",
+        "resolution": "1344 \u00d7 840",
+        "gpuErrors": "0"
+      },
+      {
+        "animated": true,
+        "frames": 240,
+        "medianMs": 16.69999999999891,
+        "p95Ms": 17.299999999999272,
+        "over25ms": 0,
+        "longFrames": 0,
+        "medianAppCpuMs": 0.25,
+        "draws": "3",
+        "resolution": "1344 \u00d7 840",
+        "gpuErrors": "0"
+      },
+      {
+        "animated": false,
+        "frames": 240,
+        "medianMs": 16.69999999999709,
+        "p95Ms": 17.299999999999272,
+        "over25ms": 0,
+        "longFrames": 0,
+        "medianAppCpuMs": 0.25,
+        "draws": "3",
+        "resolution": "1344 \u00d7 840",
+        "gpuErrors": "0"
+      }
+    ]
+  },
+  "redesigned_native": {
+    "viewport": [
+      1280,
+      800
+    ],
+    "devicePixelRatio": 2,
+    "samples": [
+      {
+        "animated": false,
+        "frames": 240,
+        "medianMs": 16.699999999999818,
+        "p95Ms": 17.5,
+        "over25ms": 0,
+        "longFrames": 0,
+        "medianAppCpuMs": 0.15,
+        "draws": "3",
+        "resolution": "1344 \u00d7 840",
+        "gpuErrors": "0"
+      },
+      {
+        "animated": true,
+        "frames": 240,
+        "medianMs": 16.699999999999818,
+        "p95Ms": 17.400000000000546,
+        "over25ms": 0,
+        "longFrames": 0,
+        "medianAppCpuMs": 0.17,
+        "draws": "3",
+        "resolution": "1344 \u00d7 840",
+        "gpuErrors": "0"
+      },
+      {
+        "animated": true,
+        "frames": 240,
+        "medianMs": 16.69999999999891,
+        "p95Ms": 17.399999999999636,
+        "over25ms": 0,
+        "longFrames": 0,
+        "medianAppCpuMs": 0.15,
+        "draws": "3",
+        "resolution": "1344 \u00d7 840",
+        "gpuErrors": "0"
+      },
+      {
+        "animated": false,
+        "frames": 240,
+        "medianMs": 16.700000000000728,
+        "p95Ms": 17.399999999997817,
+        "over25ms": 0,
+        "longFrames": 0,
+        "medianAppCpuMs": 0.17,
+        "draws": "3",
+        "resolution": "1344 \u00d7 840",
+        "gpuErrors": "0"
+      }
+    ]
+  },
+  "redesigned_dpr1": {
+    "viewport": [
+      1280,
+      800
+    ],
+    "devicePixelRatio": 1,
+    "samples": [
+      {
+        "animated": false,
+        "frames": 240,
+        "medianMs": 16.699999999999818,
+        "p95Ms": 17.40000000000009,
+        "over25ms": 0,
+        "longFrames": 0,
+        "medianAppCpuMs": 0.17,
+        "draws": "3",
+        "resolution": "896 \u00d7 560",
+        "gpuErrors": "0"
+      },
+      {
+        "animated": true,
+        "frames": 240,
+        "medianMs": 16.69999999999891,
+        "p95Ms": 17.5,
+        "over25ms": 0,
+        "longFrames": 0,
+        "medianAppCpuMs": 0.12,
+        "draws": "3",
+        "resolution": "896 \u00d7 560",
+        "gpuErrors": "0"
+      },
+      {
+        "animated": true,
+        "frames": 240,
+        "medianMs": 16.69999999999891,
+        "p95Ms": 17.5,
+        "over25ms": 4,
+        "longFrames": 0,
+        "medianAppCpuMs": 0.28,
+        "draws": "3",
+        "resolution": "896 \u00d7 560",
+        "gpuErrors": "0"
+      },
+      {
+        "animated": false,
+        "frames": 240,
+        "medianMs": 16.69999999999709,
+        "p95Ms": 17.399999999997817,
+        "over25ms": 0,
+        "longFrames": 0,
+        "medianAppCpuMs": 0.42,
+        "draws": "3",
+        "resolution": "896 \u00d7 560",
+        "gpuErrors": "0"
+      }
+    ]
+  },
+  "sunlight_gunmetal_moving": {
+    "viewport": [
+      1280,
+      800
+    ],
+    "devicePixelRatio": 2,
+    "moving": true,
+    "samples": [
+      {
+        "animated": false,
+        "frames": 240,
+        "medianMs": 16.699999999999818,
+        "p95Ms": 17.600000000000364,
+        "over25ms": 0,
+        "longFrames": 0,
+        "medianAppCpuMs": 0.22,
+        "draws": "3",
+        "resolution": "1344 \u00d7 840",
+        "gpuErrors": "0"
+      },
+      {
+        "animated": true,
+        "frames": 240,
+        "medianMs": 16.69999999999891,
+        "p95Ms": 17.600000000000364,
+        "over25ms": 0,
+        "longFrames": 0,
+        "medianAppCpuMs": 0.22,
+        "draws": "3",
+        "resolution": "1344 \u00d7 840",
+        "gpuErrors": "0"
+      },
+      {
+        "animated": true,
+        "frames": 240,
+        "medianMs": 16.69999999999891,
+        "p95Ms": 17.600000000002183,
+        "over25ms": 0,
+        "longFrames": 0,
+        "medianAppCpuMs": 0.21,
+        "draws": "3",
+        "resolution": "1344 \u00d7 840",
+        "gpuErrors": "0"
+      },
+      {
+        "animated": false,
+        "frames": 240,
+        "medianMs": 16.700000000000728,
+        "p95Ms": 17.600000000002183,
+        "over25ms": 0,
+        "longFrames": 0,
+        "medianAppCpuMs": 0.21,
+        "draws": "3",
+        "resolution": "1344 \u00d7 840",
+        "gpuErrors": "0"
+      }
+    ]
+  }
+}

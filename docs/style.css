@@ -233,3 +233,138 @@ option { background: #14181c; color: var(--text); }
   *, *:before, *:after { transition: none !important; }
   .loading-orbit { animation: none; }
 }
+
+/* Craft-fixed canopy and instruments. The transparent window keeps the actual
+   scene projection; all physical surfaces and display paints are bounded. */
+body.cockpit-active main, body.cockpit-active #labels, body.cockpit-active .canvas-shade { display: none; }
+body.cockpit-active #universe { inset: 0; width: 100%; height: 100%; }
+body.cockpit-active .header { border-bottom-color: #abcbd51a; }
+.icon-button:focus-visible { outline: 1px solid var(--text); outline-offset: 3px; }
+#cockpit { --hud: #a6ece9; --instrument: #a3b7b6; --instrument-line: #9abbb72e; position: fixed; inset: 0; z-index: 1; pointer-events: none; color: var(--hud); font: 10px var(--mono); letter-spacing: 1.3px; }
+#cockpit *, #cockpit svg { pointer-events: none; }
+.cockpit-shell { position: absolute; inset: 0; width: 100%; height: 100%; }
+.cockpit-shell>svg { display: block; width: 100%; height: 100%; fill: none; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; }
+.flight-caption { font-size: 8px; letter-spacing: 1.6px; opacity: .65; }
+/* Projected information stays light and transparent, above the solid deck. */
+.flight-compass { position: absolute; left: 50%; top: max(135px,18%); width: 210px; text-align: center; transform: translateX(-50%); text-shadow: 0 1px 3px #020a10,0 0 10px #69e8f83b; }
+.flight-compass>span { font-size: 8px; letter-spacing: 2px; opacity: .7; }
+.flight-compass strong { display: block; margin: 6px 0 9px; font-weight: 400; font-size: 18px; }
+.compass-scale { height: 9px; border-top: 1px solid #a6ece955; background: repeating-linear-gradient(90deg,#a6ece975 0 1px,transparent 1px 21px); mask-image: linear-gradient(90deg,transparent,#000 25% 75%,transparent); }
+.flight-compass i { display: block; margin: 4px auto 0; width: 0; border: 3px solid transparent; border-bottom-color: var(--hud); }
+.flight-reticle { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); opacity: .8; }
+.flight-reticle svg { width: 92px; height: 64px; stroke-width: .8; }
+.flight-glass { position: absolute; top: 55%; width: 160px; padding: 11px 12px; border-top: 1px solid #a4f4f266; border-left: 1px solid #a4f4f222; background: linear-gradient(110deg,#10282e38,transparent); text-shadow: 0 1px 3px #020a10,0 0 10px #60f1fa35; }
+.flight-glass-left { left: 22%; transform: perspective(700px) rotateY(12deg) rotateZ(-3deg); }
+.flight-glass-right { right: 22%; transform: perspective(700px) rotateY(-12deg) rotateZ(3deg); }
+.flight-glass>span { display: block; font-size: 8px; line-height: 1.8; letter-spacing: 1px; }
+.flight-glass b { font-weight: 400; }
+.flight-speed { display: flex; align-items: baseline; gap: 9px; margin-top: 6px; }
+.flight-speed strong, .flight-glass-right strong { font-size: 30px; font-weight: 300; letter-spacing: -1px; }
+.flight-speed>span { font-size: 7px; line-height: 1.5; letter-spacing: .5px; }
+.flight-meter { height: 2px; background: #a6ece92b; margin: 10px 0 6px; }
+.flight-meter i { display: block; height: 100%; background: var(--hud); transform: scaleX(0); transform-origin: left; }
+.attitude-ladder { margin-top: 6px; width: 115px; height: 30px; opacity: .6; stroke-width: .7; }
+/* Shared monitor construction: chamfered case, recessed glass, bolted bezel. */
+.instrument { position: absolute; bottom: 1.7%; height: 21%; padding: 10px 19px 10px 10px; border: 1px solid var(--case-rim,#696b63); border-radius: 5px 5px 2px 2px; color: var(--instrument); background: linear-gradient(135deg,var(--case-edge,#50514d) 0,var(--case-face,#2a2b28) 2%,var(--case-low,#111210) 9%,var(--case-face,#2a2b28) 88%,var(--case-edge,#50514d)); box-shadow: 2px 7px 0 #080908,0 1px 0 #b8b9b03b inset,0 -4px 0 #0007 inset; text-shadow: none; letter-spacing: .8px; }
+.instrument-left { left: 11.8%; width: 25.5%; transform: perspective(1000px) rotateY(14deg) rotateZ(-4deg); transform-origin: bottom right; }
+.instrument-right { right: 11.8%; width: 25.5%; transform: perspective(1000px) rotateY(-14deg) rotateZ(4deg); transform-origin: bottom left; }
+.instrument-center { left: 50%; width: 20%; height: 19%; transform: translateX(-50%); padding-right: 10px; }
+.instrument-screen { position: relative; height: 100%; overflow: hidden; border: 1px solid #6875759c; border-radius: 2px; padding: 9px 12px 6px; background: linear-gradient(130deg,#161c1d,#090e0f 65%,#151b1c); box-shadow: 0 0 0 2px #080b0b,0 2px 8px #000b inset; }
+.instrument-screen:after { content: ""; position: absolute; inset: 0; pointer-events: none; border-top: 1px solid #9ad1dc1c; background: linear-gradient(var(--glass-angle,145deg),rgb(255 218 158 / var(--glass-glint,0)),transparent 45%); }
+.instrument-title, .instrument-footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 8px; font-weight: 400; line-height: 1.5; white-space: nowrap; }
+.instrument-title { color: #d1ded9; letter-spacing: 1.1px; padding-bottom: 7px; margin-bottom: 5px; border-bottom: 1px solid var(--instrument-line); }
+.instrument-title>span:last-child { color: #8b9f9b; font-size: 7px; }
+.instrument-footer { color: #8b9f9b; border-top: 1px solid var(--instrument-line); padding-top: 5px; margin-top: 5px; font-size: 7px; letter-spacing: 1px; }
+.instrument-bezel { position: absolute; inset: 3px; }
+.instrument-bezel i { position: absolute; width: 4px; height: 4px; border-radius: 50%; background: linear-gradient(135deg,#b1b2aa,#30312d 45%,#85877e 55%,#1d1e1b); box-shadow: 0 0 0 1px #090a08; }
+.instrument-bezel i:nth-child(1) { left: 1px; top: 1px; }
+.instrument-bezel i:nth-child(2) { right: 1px; top: 1px; }
+.instrument-bezel i:nth-child(3) { left: 1px; bottom: 1px; }
+.instrument-bezel i:nth-child(4) { right: 1px; bottom: 1px; }
+.instrument-switches { position: absolute; top: 24px; right: 5px; bottom: 17px; width: 7px; display: flex; flex-direction: column; justify-content: space-between; }
+.instrument-switches span { height: 8px; border: 1px solid #797c72; border-bottom: 2px solid #090a08; background: #343631; }
+.instrument-switches span:nth-child(3n) { border-top-color: #ba9b6c; }
+.vector-row { display: grid; grid-template-columns: 33px 1fr 48px; align-items: center; gap: 12px; height: 25px; font-size: 8px; }
+.vector-row>span { color: #91a7a1; }
+.vector-row strong { font-size: 12px; text-align: right; font-weight: 400; font-variant-numeric: tabular-nums; color: #b7e1d7; }
+.axis-track { position: relative; height: 12px; background: repeating-linear-gradient(90deg,#6ba8bb35 0 1px,transparent 1px 12.5%); border-top: 1px solid var(--instrument-line); border-bottom: 1px solid var(--instrument-line); }
+.axis-track:after { content: ""; position: absolute; left: 50%; top: -2px; width: 1px; height: 14px; background: #abc8cf80; }
+.axis-track i { position: absolute; top: 4px; left: 50%; height: 2px; width: 50%; background: #a3e9e3; transform: scaleX(0); transform-origin: left; }
+.instrument-link { display: flex; align-items: center; gap: 5px; }
+.instrument-link i, .manual-light { display: inline-block; width: 3px; height: 3px; background: #b7a273; }
+.instrument-attitude { height: calc(100% - 69px); min-height: 30px; overflow: hidden; }
+.instrument-attitude svg { display: block; width: 100%; height: 100%; stroke: #6796aa; stroke-width: .6; }
+.instrument-attitude pattern path { stroke: #6796aa35; }
+.instrument-attitude .attitude-reference { stroke: #b8e4e4; stroke-width: 1; }
+.instrument-values { display: flex; justify-content: space-between; padding: 3px 0 5px; font-size: 7px; border-bottom: 1px solid var(--instrument-line); }
+.instrument-values strong { color: #b7e1d7; font-size: 11px; font-weight: 400; margin-left: 6px; }
+.telemetry-trace { position: relative; height: 15px; overflow: hidden; margin-top: 3px; contain: paint; }
+.telemetry-trace svg { width: 100%; height: 100%; stroke: #75bfc57a; stroke-width: .7; }
+.telemetry-sweep { position: absolute; top: 0; bottom: 0; left: 0; width: 10%; background: linear-gradient(90deg,transparent,#9ce8e33b,transparent); }
+.flight-console .instrument-title { margin-bottom: 7px; }
+.flight-console .flight-caption { display: block; font-size: 7px; letter-spacing: 1.1px; color: #8b9f9b; }
+.flight-console #flight-state { display: block; color: #c2eeeb; font-size: 14px; letter-spacing: 2.2px; font-weight: 400; line-height: 1.5; margin: 2px 0 5px; }
+.flight-keymap { display: flex; flex-direction: column; gap: 3px; font-size: 7px; color: #91a7a1; }
+.flight-keymap>span { display: flex; align-items: center; gap: 12px; }
+.flight-keymap kbd { min-width: 55px; font: 8px var(--mono); letter-spacing: 1px; color: #becfc8; }
+.flight-console .instrument-footer { font-size: 6px; letter-spacing: .5px; }
+/* Only two small display elements animate; neither changes geometry or paint
+   outside its own monitor. Pause completely when inactive, hidden or reduced. */
+@keyframes telemetry-scan { from { transform: translateX(-100%); } to { transform: translateX(1000%); } }
+@keyframes input-link { 0%,70%,100% { opacity: .85; } 80% { opacity: .3; } }
+body.cockpit-active:not(.page-hidden):not(.cockpit-static):not(.cockpit-reduced-motion) .telemetry-sweep { animation: telemetry-scan 4s linear infinite; will-change: transform; }
+body.cockpit-active:not(.page-hidden):not(.cockpit-static):not(.cockpit-reduced-motion) .instrument-link i { animation: input-link 5s ease-in-out infinite; }
+@media(orientation:portrait) { #cockpit-toggle { display: none; } }
+@media(max-width:1050px) and (orientation:landscape) {
+  .header-note { display: none; }
+  .flight-glass-left { left: 20%; }
+  .flight-glass-right { right: 20%; }
+  .instrument { padding: 8px 14px 8px 8px; }
+  .instrument-center { width: 22%; padding-right: 8px; }
+  .instrument-screen { padding: 6px 8px 4px; }
+  .instrument-title { font-size: 7px; letter-spacing: .6px; }
+  .instrument-title>span:last-child { font-size: 6px; }
+  .vector-row { gap: 6px; grid-template-columns: 25px 1fr 39px; }
+  .vector-row strong { font-size: 10px; }
+  .instrument-switches { right: 3px; width: 5px; }
+  .flight-console #flight-state { font-size: 11px; letter-spacing: 1px; }
+}
+@media(max-height:650px) {
+  .flight-compass { top: max(94px,20%); transform: translateX(-50%) scale(.8); transform-origin: top; }
+  .flight-glass { top: 49%; transform: scale(.77); transform-origin: top left; }
+  .flight-glass-right { transform-origin: top right; }
+  .instrument { height: 24%; bottom: 1.4%; }
+  .instrument-center { height: 22%; }
+  .instrument-title { padding-bottom: 3px; margin-bottom: 2px; font-size: 6px; }
+  .instrument-title>span:last-child { font-size: 5px; }
+  .vector-row { height: 18px; font-size: 6px; }
+  .vector-row strong { font-size: 9px; }
+  .instrument-footer { padding-top: 3px; margin-top: 2px; font-size: 5px; }
+  .instrument-link i { width: 2px; height: 2px; }
+  .instrument-attitude { height: calc(100% - 49px); min-height: 18px; }
+  .instrument-values { padding: 2px 0; font-size: 5px; }
+  .instrument-values strong { font-size: 8px; }
+  .telemetry-trace { height: 10px; margin-top: 2px; }
+  .flight-console .instrument-title { margin-bottom: 4px; }
+  .flight-console .flight-caption { display: none; }
+  .flight-console #flight-state { margin: 0 0 3px; font-size: 10px; }
+  .flight-keymap { font-size: 5px; gap: 2px; }
+  .flight-keymap kbd { min-width: 43px; font-size: 6px; }
+  .flight-console .instrument-footer { font-size: 5px; letter-spacing: 0; }
+}
+@media(max-height:420px) {
+  .instrument { height: 25%; padding-top: 6px; padding-bottom: 6px; }
+  .instrument-screen { padding-top: 4px; }
+  .instrument-center { height: 27.5%; min-height: 100px; }
+  .vector-row { height: 13px; }
+  .axis-track { height: 8px; }
+  .axis-track:after { height: 10px; }
+  .axis-track i { top: 2px; }
+  .flight-console .instrument-footer { display: flex; }
+  .instrument-switches { top: 16px; bottom: 10px; }
+  .instrument-switches span { height: 5px; }
+  .flight-glass { top: 46%; }
+}
+@media(prefers-reduced-motion:reduce) {
+  body.cockpit-active .telemetry-sweep, body.cockpit-active .instrument-link i { animation: none !important; will-change: auto !important; }
+}

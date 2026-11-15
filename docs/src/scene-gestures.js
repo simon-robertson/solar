@@ -1,5 +1,6 @@
 export class SceneGestures {
   constructor(canvas,camera,onMove,onPick) {
+    this.canvas = canvas;
     this.pointers = new Map();
     this.moved = 0; this.pinchDistance = 0;
 
@@ -50,6 +51,12 @@ export class SceneGestures {
   }
 
   get dragging() { return this.pointers.size>0 && this.moved>4; }
+
+  cancel() {
+    const ids = Array.from(this.pointers.keys());
+    this.pointers.clear(); this.moved = 0; this.pinchDistance = 0;
+    for (const id of ids) if (this.canvas.hasPointerCapture(id)) this.canvas.releasePointerCapture(id);
+  }
 
   distance() {
     const [a,b] = this.pointers.values();

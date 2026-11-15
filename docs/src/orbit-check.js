@@ -47,6 +47,7 @@ try {
   }
   const project = point => Array.from(camera.project(...point,width,height));
   const circlePoint = angle => [Math.cos(angle),0,-Math.sin(angle)];
+  const colourTotals = new Float64Array(3);
   async function draw(lines=true,markers=false) {
     device.queue.writeBuffer(renderer.uniformBuffer,0,uniforms);
     device.queue.writeBuffer(renderer.orbitBuffer,0,orbits);
@@ -59,9 +60,11 @@ try {
     encoder.copyTextureToBuffer({ texture: target },{ buffer: readback,bytesPerRow },[width,height]);
     device.queue.submit([encoder.finish()]); await readback.mapAsync(GPUMapMode.READ);
     const pixels = new Uint16Array(readback.getMappedRange()), image = new Float32Array(width*height);
+    colourTotals.fill(0);
     for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
       const o = y*bytesPerRow/2+x*4;
       image[y*width+x] = half(pixels[o])+half(pixels[o+1])+half(pixels[o+2]);
+      for (let channel = 0; channel<3; channel++) colourTotals[channel] += half(pixels[o+channel]);
     }
     readback.unmap(); return image;
   }
@@ -152,6 +155,21 @@ try {
   }
   check("Thin stroke width is independent of trail brightness, zoom and inclination",Math.max(...pairs)<=.125 && Math.min(...widths)>=.75 && Math.max(...widths)<=2.5,`raster half-maximum widths ${widths.map(x=>x.toFixed(2)).join(", ")} pixels`);
 
+  view(); orbits[12] = 0;
+  const normalGuide = await draw(), normalColour = colourTotals.slice();
+  uniforms[19] = 2;
+  const cockpitGuide = await draw();
+  check("Cockpit guides are cyan and retain the normal path coverage",
+    colourTotals[1]>colourTotals[0]*2 && colourTotals[2]>colourTotals[0]*2 && normalColour[0]>normalColour[2] &&
+    cockpitGuide.some(x=>x>0) && cockpitGuide.every((value,i)=>(value>0)===(normalGuide[i]>0)));
+  let cockpitBounded = true;
+  for (const inclination of [.005,0,-.005]) {
+    view(7,inclination); uniforms[19] = 2;
+    const image = await draw(), envelope = referenceEnvelope();
+    cockpitBounded &&= image.filter(x=>x>.00001).length>30 && image.every((x,i)=>Number.isFinite(x) && (x<=.00001 || envelope[i]));
+  }
+  check("Cyan cockpit paths stay bounded at low and coplanar angles",cockpitBounded);
+  uniforms[19] = 1;
   view(); orbits[12] = 0; orbits[14] = 1; orbits[15] = -1;
   const center = project([1,0,0]), marker = await draw(false,true);
   check("Moon annotations remain hollow screen-space circles",at(marker,...center)===0 && peakAt(marker,[center[0]+11,center[1]])>.3 && at(marker,center[0]+15,center[1])===0);
@@ -190,9 +208,18 @@ try {
   production.deltaSeconds = .25; renderer.render(camera,production,6);
   const detailedDraws = renderer.drawCalls;
   renderer.orbits = false; renderer.markerOpacity = 0; renderer.render(camera,production,6);
+  const hiddenDraws = renderer.drawCalls;
+  renderer.orbits = true; renderer.markerOpacity = 1;
+  camera.enterCockpit(); renderer.render(camera,production,6);
+  const cockpitPaths = renderer.drawCalls===3 && renderer.uniforms[19]===2 && renderer.uniforms[23]===0 && renderer.orbits;
+  renderer.orbits = false; renderer.render(camera,production,6);
+  const cockpitOff = renderer.drawCalls===2 && renderer.uniforms[19]===0;
+  renderer.orbits = true; camera.exitCockpit(production.data); renderer.render(camera,production,6);
+  check("Cockpit keeps batched cyan paths, respects the path setting and restores normal annotations",
+    cockpitPaths && cockpitOff && renderer.uniforms[19]===1 && renderer.drawCalls===4);
   await device.queue.onSubmittedWorkDone();
   const validation = await device.popErrorScope();
-  check("Production batching validates, reuses resources and stays below ten draws",!validation && errors.length===0 && detailedDraws===4 && renderer.drawCalls===2 && renderer.resourceGeneration===generation && renderer.orbitPoints===points,validation?.message || errors.join("; ") || "4 draws with paths + moons; 2 with both hidden");
+  check("Production batching validates, reuses resources and stays below ten draws",!validation && errors.length===0 && detailedDraws===4 && hiddenDraws===2 && renderer.resourceGeneration===generation && renderer.orbitPoints===points,validation?.message || errors.join("; ") || "4 draws with paths + moons; 3 in cockpit; 2 with paths hidden");
 } catch (error) { check("Orbit verification completed",false,error.message); }
 finally {
   for (const resource of resources) resource.destroy();
