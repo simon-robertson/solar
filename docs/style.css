@@ -177,7 +177,7 @@ option { background: #14181c; color: var(--text); }
   .brand-mark:after { width: 24px; top: 7px; }
   .header-note { display: none; }
   #universe, #labels { top: 272px; bottom: 142px; height: calc(100dvh - 414px); }
-  body.info-hidden #universe, body.info-hidden #labels { top: 126px; height: calc(100dvh - 268px); }
+  body.info-hidden #universe, body.info-hidden #labels { top: 126px; bottom: 96px; height: calc(100dvh - 222px); }
   .canvas-shade { background: linear-gradient(0deg,#080a0c,transparent 24%); }
   .intro { top: 130px; width: calc(100% - 36px); max-height: 150px; }
   .eyebrow { font-size: 9px; letter-spacing: .4px; }

@@ -15,7 +15,6 @@ const adaptiveQuality = new AdaptiveQuality();
 renderer.prepareAnnotations = prepareSatelliteMarkers;
 const date = new Date();
 const dateFormat = new Intl.DateTimeFormat("en-GB",{ day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
-const numbers = new Intl.NumberFormat("en-GB",{ maximumFractionDigits: 0 });
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 if (reducedMotion) simulation.paused = true;
 
@@ -31,12 +30,13 @@ const annotationBounds = new Float32Array(annotationPanels.length*4);
 const nav = $("planet-nav");
 const labelsContainer = $("labels");
 const informationPanel = $("information-panel"), infoToggle = $("info-toggle");
+const playbackPanel = $("playback-panel");
 const loadScreen = $("loading");
 const loadingText = $("loading-text");
 const pauseIcon = $("pause-icon"), playIcon = $("play-icon"), pauseButton = $("pause");
 const timeState = $("time-state"), dateText = $("date");
 const stats = { fps: $("stat-fps"), frame: $("stat-frame"), cpu: $("stat-cpu"), draws: $("stat-draws"), compute: $("stat-compute"), resolution: $("stat-resolution"), textures: $("stat-textures"), delta: $("stat-delta"), resources: $("stat-resources"), errors: $("stat-errors") };
-const info = { kind: $("body-kind"), name: $("body-name"), label1: $("fact-one-label"), value1: $("fact-one"), label2: $("fact-two-label"), value2: $("fact-two") };
+const info = { kind: $("body-kind"), name: $("body-name"), facts: $("body-facts") };
 const preferencesKey = "solar.preferences.v1";
 const preferences = {
   speed: $("speed").value, reverse: false,
@@ -138,11 +138,7 @@ function selectBody(index) {
   }
   info.kind.textContent = body.kind;
   info.name.textContent = body.name;
-  info.label1.textContent = "MEAN RADIUS";
-  info.value1.innerHTML = `${numbers.format(body.km)} <small>km</small>`;
-  info.label2.textContent = index===0 ? "ROTATION PERIOD" : "ORBITAL PERIOD";
-  const period = index===0 ? body.day : body.period;
-  info.value2.innerHTML = period > 1000 ? `${(period/365.25).toFixed(1)} <small>years</small>` : `${period.toFixed(period < 100 ? 1 : 0)} <small>days</small>`;
+  info.facts.hidden = true;
   setViewButtons(true);
   refreshAnnotationBounds();
 }
@@ -155,10 +151,7 @@ function overview() {
   document.body.dataset.view = "system";
   info.kind.textContent = "SYSTEM OVERVIEW";
   info.name.textContent = "Solar system";
-  info.label1.textContent = "PLANETS";
-  info.value1.textContent = "08";
-  info.label2.textContent = "SYSTEM AGE";
-  info.value2.innerHTML = "4.6 <small>billion yr</small>";
+  info.facts.hidden = false;
   refreshAnnotationBounds();
 }
 
@@ -190,11 +183,12 @@ function setSettings(open) {
 function toggleInformation() {
   const show = informationPanel.hidden;
   // Do not leave focus inside a panel that has just been removed from view.
-  if (!show && informationPanel.contains(document.activeElement)) document.activeElement.blur();
+  if (!show && (informationPanel.contains(document.activeElement) || playbackPanel.contains(document.activeElement))) document.activeElement.blur();
   informationPanel.hidden = !show;
+  playbackPanel.hidden = !show;
   document.body.classList.toggle("info-hidden",!show);
   infoToggle.setAttribute("aria-expanded",String(show));
-  const action = `${show ? "Hide" : "Show"} information panel`;
+  const action = `${show ? "Hide" : "Show"} information and playback panels`;
   infoToggle.setAttribute("aria-label",action);
   infoToggle.title = `${action} (Tab)`;
   hideMovingLabels();

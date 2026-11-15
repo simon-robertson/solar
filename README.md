@@ -51,8 +51,9 @@ See [GitHub's publishing-source documentation](https://docs.github.com/en/pages/
 - Drag the scene to orbit; scroll or pinch with both fingers inside the scene to
   zoom. Click or tap a planet to focus it.
 - Body labels hide during camera movement and fade back in once the camera settles.
-- Tab (or Shift+Tab) shows/hides the information panel instead of moving focus.
-  The panel button in the header provides the same toggle on touch devices.
+- Tab (or Shift+Tab) shows/hides the information and playback panels instead of
+  moving focus. The panel button in the header provides the same toggle on touch
+  devices. When hidden, the body selection rail moves down to the bottom.
 - Space pauses/resumes; R resets the simulation date to today; Escape returns to
   system view. These playback/navigation shortcuts leave form controls and
   dialogs alone; the panel's Tab shortcut works throughout the app.
